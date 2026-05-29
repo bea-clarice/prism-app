@@ -8,8 +8,13 @@ interface AuthPageProps {
 
 export function AuthPage({ onGoogleAuth }: AuthPageProps) {
   const handleGoogleAuth = async () => {
-    const profile = await signInWithGoogle();
-    onGoogleAuth(profile);
+    try {
+      const profile = await signInWithGoogle();
+      onGoogleAuth(profile);
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') return;
+      console.error('Google sign-in failed:', error.message);
+    }
   };
 
   return (
@@ -21,7 +26,7 @@ export function AuthPage({ onGoogleAuth }: AuthPageProps) {
           </div>
           <h1 className="text-4xl font-bold text-foreground leading-tight">Prism</h1>
           <p className="text-muted-foreground mt-2">
-            Sign in or create an account with Google through Firebase.
+            Sign in or create an account with Google.
           </p>
         </div>
 
