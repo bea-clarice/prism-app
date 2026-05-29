@@ -4,7 +4,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { CategoryIcon } from './category-icons/CategoryIcon';
 import type { Account, Category, Ledger, Transaction } from './types';
-import { formatDisplayDate, formatPeso } from '../utils/format';
+import { formatDisplayDate, formatPeso, getPhilippineDate, getPhilippineDateString } from '../utils/format';
 
 interface AccountPageProps {
   activeLedger: Ledger | null;
@@ -125,7 +125,7 @@ function EditTransactionModal({
   const [date, setDate] = useState(transaction.date);
   const [error, setError] = useState('');
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getPhilippineDateString();
   const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const balanceAfterTransaction = transaction.accountBalanceAfter ?? account.balance;
 
@@ -269,13 +269,13 @@ function AccountDetailView({
   onUpdateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
   onDeleteTransaction: (id: string) => void;
 }) {
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(getPhilippineDate());
   const [showQr, setShowQr] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const selectedDateStr = selectedDate
     ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
-    : new Date().toISOString().split('T')[0];
+    : getPhilippineDateString();
 
   const accountTransactions = useMemo(() => transactions.filter(t => t.accountId === account.id), [transactions, account.id]);
   const dayTransactions = accountTransactions.filter(t => t.date === selectedDateStr);

@@ -3,7 +3,7 @@ import { ArrowUpRight, Plus, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CategoryIcon, CATEGORY_ICON_OPTIONS } from './category-icons/CategoryIcon';
 import type { Account, Category, CategoryIconKey, Ledger, Transaction } from './types';
-import { formatPeso } from '../utils/format';
+import { formatPeso, getPhilippineDateString, getPhilippineMonthString } from '../utils/format';
 
 interface AddTransactionModalProps {
   category: Category;
@@ -42,11 +42,11 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
   const [showPaymentItems, setShowPaymentItems] = useState(false);
   const [paymentItems, setPaymentItems] = useState<{ label: string; amount: string }[]>([]);
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getPhilippineDateString());
   const [error, setError] = useState('');
 
   const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-  const today = new Date().toISOString().split('T')[0];
+  const today = getPhilippineDateString();
 
   const addPaymentItem = () => {
     setShowPaymentItems(true);
@@ -207,7 +207,7 @@ export function DashboardPage({ activeLedger, categories, transactions, accounts
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [addingCategoryType, setAddingCategoryType] = useState<'income' | 'expense' | null>(null);
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = getPhilippineMonthString();
   const monthTransactions = transactions.filter(t => t.date.startsWith(currentMonth));
   const totalBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
   const totalIncome = monthTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
