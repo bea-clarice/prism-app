@@ -43,8 +43,10 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
   const [paymentItems, setPaymentItems] = useState<{ label: string; amount: string }[]>([]);
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [error, setError] = useState('');
 
   const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  const today = new Date().toISOString().split('T')[0];
 
   const addPaymentItem = () => {
     setShowPaymentItems(true);
@@ -61,10 +63,19 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
 
   const handleSubmit = () => {
     const parsed = showPaymentItems && paymentItems.length > 0 ? itemizedTotal : parseFloat(amount);
+    if (date > today) {
+      setError('Transactions cannot be added for future dates.');
+      return;
+    }
     if (!parsed || !accountId) return;
     onAdd({
       description: description.trim() || category.name,
       amount: parsed,
+      paymentItems: showPaymentItems
+        ? paymentItems
+            .map(item => ({ label: item.label.trim(), amount: parseFloat(item.amount) || 0 }))
+            .filter(item => item.amount > 0)
+        : undefined,
       type: category.type,
       categoryId: category.id,
       accountId,
@@ -144,7 +155,8 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
               ))}
             </div>
           </div>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          <input type="date" max={today} value={date} onChange={e => setDate(e.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          {error && <p className="text-sm text-rose-600">{error}</p>}
           <button onClick={handleSubmit} className="w-full bg-primary text-white rounded-xl p-4 font-semibold hover:opacity-90 transition-opacity">
             Add {category.type === 'income' ? 'Income' : 'Expense'}
           </button>
@@ -284,7 +296,7 @@ export function DashboardPage({ activeLedger, categories, transactions, accounts
               <XAxis dataKey="name" hide />
               <YAxis hide />
               <Tooltip formatter={(value: number) => formatPeso(value)} />
-              <Line type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={3} dot={{ r: 3, fill: '#ec4899' }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={3} dot={false} activeDot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}

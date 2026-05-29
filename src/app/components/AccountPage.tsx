@@ -4,7 +4,7 @@ import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { CategoryIcon } from './category-icons/CategoryIcon';
 import type { Account, Category, Ledger, Transaction } from './types';
-import { formatPeso } from '../utils/format';
+import { formatDisplayDate, formatPeso } from '../utils/format';
 
 interface AccountPageProps {
   activeLedger: Ledger | null;
@@ -117,15 +117,45 @@ function EditTransactionModal({
 }) {
   const [description, setDescription] = useState(transaction.description);
   const [amount, setAmount] = useState(String(transaction.amount));
+  const [showPaymentItems, setShowPaymentItems] = useState(Boolean(transaction.paymentItems?.length));
+  const [paymentItems, setPaymentItems] = useState(
+    transaction.paymentItems?.map(item => ({ label: item.label, amount: String(item.amount) })) || []
+  );
   const [accountId, setAccountId] = useState(transaction.accountId);
   const [date, setDate] = useState(transaction.date);
+  const [error, setError] = useState('');
+
+  const today = new Date().toISOString().split('T')[0];
+  const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+  const addPaymentItem = () => {
+    setShowPaymentItems(true);
+    setPaymentItems(prev => [...prev, { label: '', amount: '' }]);
+  };
+
+  const updatePaymentItem = (index: number, key: 'label' | 'amount', value: string) => {
+    setPaymentItems(prev => prev.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
+  };
+
+  const removePaymentItem = (index: number) => {
+    setPaymentItems(prev => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
 
   const handleSave = () => {
-    const parsed = parseFloat(amount);
+    const parsed = showPaymentItems && paymentItems.length > 0 ? itemizedTotal : parseFloat(amount);
+    if (date > today) {
+      setError('Transactions cannot be saved for future dates.');
+      return;
+    }
     if (!parsed || !accountId) return;
     onSave({
       description: description.trim() || category?.name || 'Transaction',
       amount: parsed,
+      paymentItems: showPaymentItems
+        ? paymentItems
+            .map(item => ({ label: item.label.trim(), amount: parseFloat(item.amount) || 0 }))
+            .filter(item => item.amount > 0)
+        : undefined,
       type: transaction.type,
       categoryId: transaction.categoryId,
       accountId,
@@ -151,8 +181,39 @@ function EditTransactionModal({
 
         <div className="space-y-4">
           <input value={description} onChange={event => setDescription(event.target.value)} placeholder="Description" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          <input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="Amount" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          <input type="date" value={date} onChange={event => setDate(event.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          {!showPaymentItems && (
+            <input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="Amount" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          )}
+          <div className="rounded-2xl bg-muted p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Add payments together</p>
+                <p className="text-xs text-muted-foreground">Edit the same itemized inputs used for this transaction.</p>
+              </div>
+              <button onClick={addPaymentItem} className="bg-card text-primary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
+                <Plus className="w-4 h-4" />
+                Add
+              </button>
+            </div>
+            {showPaymentItems && (
+              <div className="mt-3 space-y-2">
+                {paymentItems.map((item, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_96px_32px] gap-2">
+                    <input value={item.label} onChange={event => updatePaymentItem(index, 'label', event.target.value)} placeholder="Vehicle" className="min-w-0 bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                    <input type="number" min="0" step="0.01" value={item.amount} onChange={event => updatePaymentItem(index, 'amount', event.target.value)} placeholder="0.00" className="bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                    <button onClick={() => removePaymentItem(index)} className="bg-card rounded-xl text-rose-500 flex items-center justify-center">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-sm pt-1">
+                  <span className="text-muted-foreground">Computed total</span>
+                  <span className="font-semibold">{formatPeso(itemizedTotal)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+          <input type="date" max={today} value={date} onChange={event => setDate(event.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
 
           <div>
             <p className="text-sm text-muted-foreground mb-2">Account</p>
@@ -182,6 +243,7 @@ function EditTransactionModal({
               Save
             </button>
           </div>
+          {error && <p className="text-sm text-rose-600">{error}</p>}
         </div>
       </div>
     </div>
@@ -216,6 +278,10 @@ function AccountDetailView({
   const accountTransactions = useMemo(() => transactions.filter(t => t.accountId === account.id), [transactions, account.id]);
   const dayTransactions = accountTransactions.filter(t => t.date === selectedDateStr);
   const getCategoryById = (id: string) => categories.find(c => c.id === id);
+  const transactionDates = useMemo(
+    () => Array.from(new Set(accountTransactions.map(transaction => transaction.date))).map(date => new Date(`${date}T00:00:00`)),
+    [accountTransactions]
+  );
 
   const totalIncome = accountTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = accountTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
@@ -236,7 +302,7 @@ function AccountDetailView({
           </div>
           <div className="min-w-0">
             <p className="font-medium text-sm truncate">{transaction.description || category?.name || 'Transaction'}</p>
-            <p className="text-xs text-muted-foreground">{category?.name || 'Unknown'} - {transaction.date}</p>
+            <p className="text-xs text-muted-foreground">{category?.name || 'Unknown'} - {formatDisplayDate(transaction.date)}</p>
           </div>
         </div>
         <p className={`font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
@@ -295,13 +361,26 @@ function AccountDetailView({
               color: white !important;
               border-radius: 50% !important;
             }
+            .rdp-custom .rdp-day_transaction:not(.rdp-day_selected) {
+              background-color: #fce7f3 !important;
+              color: #be185d !important;
+              border-radius: 50% !important;
+              font-weight: 700;
+            }
             .rdp-custom .rdp-day_today,
             .rdp-custom .rdp-caption_label {
               color: #ec4899 !important;
               font-weight: bold;
             }
           `}</style>
-          <DayPicker mode="single" selected={selectedDate} onSelect={setSelectedDate} className="rdp-custom" />
+          <DayPicker
+            mode="single"
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+            modifiers={{ transaction: transactionDates }}
+            modifiersClassNames={{ transaction: 'rdp-day_transaction' }}
+            className="rdp-custom"
+          />
         </div>
       </div>
 
@@ -359,6 +438,38 @@ function AccountDetailView({
 export function AccountPage({ activeLedger, accounts, transactions, categories, onAddAccount, onUpdateTransaction, onDeleteTransaction }: AccountPageProps) {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [addingAccount, setAddingAccount] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
+  const getCategoryById = (id: string) => categories.find(category => category.id === id);
+  const getAccountById = (id: string) => accounts.find(account => account.id === id);
+
+  const renderAllTransaction = (transaction: Transaction, bordered: boolean) => {
+    const category = getCategoryById(transaction.categoryId);
+    const account = getAccountById(transaction.accountId);
+
+    return (
+      <button
+        key={transaction.id}
+        onClick={() => setEditingTransaction(transaction)}
+        className={`w-full flex items-center justify-between p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            {category ? <CategoryIcon icon={category.icon} className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{transaction.description || category?.name || 'Transaction'}</p>
+            <p className="text-xs text-muted-foreground">
+              {account?.name || 'Unknown account'} - {formatDisplayDate(transaction.date)}
+            </p>
+          </div>
+        </div>
+        <p className={`font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
+          {transaction.type === 'income' ? '+' : '-'}{formatPeso(transaction.amount)}
+        </p>
+      </button>
+    );
+  };
 
   if (selectedAccount) {
     const current = accounts.find(account => account.id === selectedAccount.id) || selectedAccount;
@@ -420,7 +531,33 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
         })}
       </div>
 
+      <div className="mt-8">
+        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">All Transaction History</h3>
+        {transactions.length === 0 ? (
+          <EmptyState title="No transactions yet" body="Add transactions from dashboard categories to display all history." />
+        ) : (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {transactions.map((transaction, index) => renderAllTransaction(transaction, index < transactions.length - 1))}
+          </div>
+        )}
+      </div>
+
       {addingAccount && <AddAccountModal onAdd={onAddAccount} onClose={() => setAddingAccount(false)} />}
+
+      {editingTransaction && getAccountById(editingTransaction.accountId) && (
+        <EditTransactionModal
+          transaction={editingTransaction}
+          account={getAccountById(editingTransaction.accountId)!}
+          accounts={accounts}
+          category={getCategoryById(editingTransaction.categoryId)}
+          onSave={transaction => onUpdateTransaction(editingTransaction.id, transaction)}
+          onDelete={() => {
+            onDeleteTransaction(editingTransaction.id);
+            setEditingTransaction(null);
+          }}
+          onClose={() => setEditingTransaction(null)}
+        />
+      )}
     </div>
   );
 }

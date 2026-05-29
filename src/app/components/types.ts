@@ -41,6 +41,7 @@ export interface Transaction {
   ledgerId: string;
   description: string;
   amount: number;
+  paymentItems?: { label: string; amount: number }[];
   type: 'income' | 'expense';
   categoryId: string;
   accountId: string;

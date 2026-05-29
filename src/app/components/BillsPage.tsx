@@ -132,7 +132,9 @@ export function BillsPage({ activeLedger, bills, onAddBill, onTogglePaid, onDele
               <div className="flex items-center justify-between mt-4">
                 <span className={`text-xs px-3 py-1 rounded-full border ${status.className}`}>{status.label}</span>
                 <div className="flex items-center gap-2">
-                  <button onClick={() => onTogglePaid(bill.id)} className={`h-9 w-9 rounded-xl flex items-center justify-center ${bill.paid ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`} aria-label="Mark paid"><Check className="w-4 h-4" /></button>
+                  {!bill.paid && (
+                    <button onClick={() => onTogglePaid(bill.id)} className="h-9 w-9 rounded-xl flex items-center justify-center bg-muted text-muted-foreground" aria-label="Mark paid"><Check className="w-4 h-4" /></button>
+                  )}
                   <button onClick={() => onDeleteBill(bill.id)} className="h-9 w-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center" aria-label="Delete bill"><Trash2 className="w-4 h-4" /></button>
                 </div>
               </div>
