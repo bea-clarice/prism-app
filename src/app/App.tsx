@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, Home, ReceiptText, Settings, User, X } from 'lucide-react';
+import { Bell, ChevronDown, Home, ReceiptText, Settings, User, X } from 'lucide-react';
 import { AccountPage } from './components/AccountPage';
 import { AuthPage } from './components/AuthPage';
 import { BillsPage } from './components/BillsPage';
@@ -42,6 +42,7 @@ export default function App() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [ledgerPickerOpen, setLedgerPickerOpen] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -186,6 +187,42 @@ export default function App() {
     }));
   };
 
+  const updateTransaction = (id: string, nextTransaction: Omit<Transaction, 'id' | 'ledgerId'>) => {
+    const currentTransaction = transactions.find(transaction => transaction.id === id);
+    if (!currentTransaction || currentTransaction.ledgerId !== activeLedgerId) return;
+
+    setTransactions(prev => prev.map(transaction => (
+      transaction.id === id
+        ? { ...nextTransaction, id, ledgerId: currentTransaction.ledgerId }
+        : transaction
+    )));
+
+    setAccounts(prev => prev.map(account => {
+      if (account.ledgerId !== currentTransaction.ledgerId) return account;
+
+      const oldDelta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
+      const nextDelta = nextTransaction.type === 'income' ? nextTransaction.amount : -nextTransaction.amount;
+      let balance = account.balance;
+
+      if (account.id === currentTransaction.accountId) balance -= oldDelta;
+      if (account.id === nextTransaction.accountId) balance += nextDelta;
+
+      return { ...account, balance };
+    }));
+  };
+
+  const deleteTransaction = (id: string) => {
+    const currentTransaction = transactions.find(transaction => transaction.id === id);
+    if (!currentTransaction || currentTransaction.ledgerId !== activeLedgerId) return;
+
+    setTransactions(prev => prev.filter(transaction => transaction.id !== id));
+    setAccounts(prev => prev.map(account => {
+      if (account.id !== currentTransaction.accountId) return account;
+      const delta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
+      return { ...account, balance: account.balance - delta };
+    }));
+  };
+
   const addAccount = (account: Omit<Account, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
     setAccounts(prev => [...prev, { ...account, ledgerId: activeLedgerId, id: `a${Date.now()}` }]);
@@ -248,16 +285,34 @@ export default function App() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold leading-none">Prism</p>
             {ledgers.length > 0 ? (
-              <select
-                value={activeLedgerId || ''}
-                onChange={event => setActiveLedgerId(event.target.value)}
-                className="mt-1 w-full bg-transparent text-xs text-muted-foreground outline-none"
-                aria-label="Active ledger"
-              >
-                {ledgers.map(ledger => (
-                  <option key={ledger.id} value={ledger.id}>{ledger.name}</option>
-                ))}
-              </select>
+              <div className="relative mt-1">
+                <button
+                  onClick={() => setLedgerPickerOpen(open => !open)}
+                  className="inline-flex max-w-full items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
+                  aria-label="Choose ledger"
+                >
+                  <span className="truncate">{activeLedger?.name || 'Choose ledger'}</span>
+                  <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                </button>
+                {ledgerPickerOpen && (
+                  <div className="absolute left-0 top-full mt-2 w-56 rounded-2xl bg-card border border-border shadow-xl p-2 z-50">
+                    {ledgers.map(ledger => (
+                      <button
+                        key={ledger.id}
+                        onClick={() => {
+                          setActiveLedgerId(ledger.id);
+                          setLedgerPickerOpen(false);
+                        }}
+                        className={`w-full text-left rounded-xl px-3 py-2 text-sm ${
+                          activeLedgerId === ledger.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                        }`}
+                      >
+                        {ledger.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <p className="mt-1 text-xs text-muted-foreground">Add a ledger to begin</p>
             )}
@@ -320,6 +375,8 @@ export default function App() {
           transactions={ledgerData.transactions}
           categories={ledgerData.categories}
           onAddAccount={addAccount}
+          onUpdateTransaction={updateTransaction}
+          onDeleteTransaction={deleteTransaction}
         />
       )}
 

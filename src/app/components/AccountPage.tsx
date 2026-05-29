@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Banknote, ChevronLeft, CreditCard, ImagePlus, Plus, Wallet, X } from 'lucide-react';
+import { ChevronLeft, CreditCard, ImagePlus, Plus, Wallet, X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { CategoryIcon } from './category-icons/CategoryIcon';
@@ -12,6 +12,8 @@ interface AccountPageProps {
   transactions: Transaction[];
   categories: Category[];
   onAddAccount: (account: Omit<Account, 'id' | 'ledgerId'>) => void;
+  onUpdateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
+  onDeleteTransaction: (id: string) => void;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
@@ -96,9 +98,116 @@ function AddAccountModal({ onAdd, onClose }: { onAdd: (account: Omit<Account, 'i
   );
 }
 
-function AccountDetailView({ account, transactions, categories, onBack }: { account: Account; transactions: Transaction[]; categories: Category[]; onBack: () => void }) {
+function EditTransactionModal({
+  transaction,
+  account,
+  accounts,
+  category,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  transaction: Transaction;
+  account: Account;
+  accounts: Account[];
+  category?: Category;
+  onSave: (transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const [description, setDescription] = useState(transaction.description);
+  const [amount, setAmount] = useState(String(transaction.amount));
+  const [accountId, setAccountId] = useState(transaction.accountId);
+  const [date, setDate] = useState(transaction.date);
+
+  const handleSave = () => {
+    const parsed = parseFloat(amount);
+    if (!parsed || !accountId) return;
+    onSave({
+      description: description.trim() || category?.name || 'Transaction',
+      amount: parsed,
+      type: transaction.type,
+      categoryId: transaction.categoryId,
+      accountId,
+      date,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={onClose}>
+      <div className="bg-card rounded-t-3xl p-6 w-full max-w-md mx-auto pb-10" onClick={event => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h3 className="font-semibold">Transaction Details</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Your current balance is {formatPeso(account.balance)}.
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full bg-muted">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <input value={description} onChange={event => setDescription(event.target.value)} placeholder="Description" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          <input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="Amount" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          <input type="date" value={date} onChange={event => setDate(event.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">Account</p>
+            <div className="grid grid-cols-2 gap-2">
+              {accounts.map(nextAccount => (
+                <button
+                  key={nextAccount.id}
+                  onClick={() => setAccountId(nextAccount.id)}
+                  className={`rounded-xl p-3 text-left border ${
+                    accountId === nextAccount.id
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted text-foreground'
+                  }`}
+                >
+                  <p className="text-sm font-semibold truncate">{nextAccount.name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{nextAccount.kind}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button onClick={onDelete} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
+              Delete
+            </button>
+            <button onClick={handleSave} className="rounded-xl p-3 bg-primary text-primary-foreground font-semibold">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AccountDetailView({
+  account,
+  accounts,
+  transactions,
+  categories,
+  onBack,
+  onUpdateTransaction,
+  onDeleteTransaction,
+}: {
+  account: Account;
+  accounts: Account[];
+  transactions: Transaction[];
+  categories: Category[];
+  onBack: () => void;
+  onUpdateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
+  onDeleteTransaction: (id: string) => void;
+}) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [showQr, setShowQr] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const selectedDateStr = selectedDate
     ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
@@ -116,7 +225,11 @@ function AccountDetailView({ account, transactions, categories, onBack }: { acco
   const renderTransaction = (transaction: Transaction, bordered: boolean) => {
     const category = getCategoryById(transaction.categoryId);
     return (
-      <div key={transaction.id} className={`flex items-center justify-between p-4 ${bordered ? 'border-b border-border' : ''}`}>
+      <button
+        key={transaction.id}
+        onClick={() => setEditingTransaction(transaction)}
+        className={`w-full flex items-center justify-between p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
             {category ? <CategoryIcon icon={category.icon} className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
@@ -129,7 +242,7 @@ function AccountDetailView({ account, transactions, categories, onBack }: { acco
         <p className={`font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
           {transaction.type === 'income' ? '+' : '-'}{formatPeso(transaction.amount)}
         </p>
-      </div>
+      </button>
     );
   };
 
@@ -224,24 +337,48 @@ function AccountDetailView({ account, transactions, categories, onBack }: { acco
           </div>
         </div>
       )}
+
+      {editingTransaction && (
+        <EditTransactionModal
+          transaction={editingTransaction}
+          account={account}
+          accounts={accounts}
+          category={getCategoryById(editingTransaction.categoryId)}
+          onSave={transaction => onUpdateTransaction(editingTransaction.id, transaction)}
+          onDelete={() => {
+            onDeleteTransaction(editingTransaction.id);
+            setEditingTransaction(null);
+          }}
+          onClose={() => setEditingTransaction(null)}
+        />
+      )}
     </div>
   );
 }
 
-export function AccountPage({ activeLedger, accounts, transactions, categories, onAddAccount }: AccountPageProps) {
+export function AccountPage({ activeLedger, accounts, transactions, categories, onAddAccount, onUpdateTransaction, onDeleteTransaction }: AccountPageProps) {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [addingAccount, setAddingAccount] = useState(false);
 
   if (selectedAccount) {
     const current = accounts.find(account => account.id === selectedAccount.id) || selectedAccount;
-    return <AccountDetailView account={current} transactions={transactions} categories={categories} onBack={() => setSelectedAccount(null)} />;
+    return (
+      <AccountDetailView
+        account={current}
+        accounts={accounts}
+        transactions={transactions}
+        categories={categories}
+        onBack={() => setSelectedAccount(null)}
+        onUpdateTransaction={onUpdateTransaction}
+        onDeleteTransaction={onDeleteTransaction}
+      />
+    );
   }
 
   return (
     <div className="p-6 max-w-md mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <p className="text-sm text-muted-foreground">All Accounts</p>
           <h2 className="text-3xl font-bold">My Accounts</h2>
         </div>
         <button onClick={() => setAddingAccount(true)} disabled={!activeLedger} className="h-11 w-11 rounded-2xl bg-primary text-white flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40" aria-label="Add an account">
@@ -259,22 +396,25 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
         {activeLedger && accounts.length === 0 && <EmptyState title="No accounts yet" body="Add an account to display balances and transactions." />}
 
         {accounts.map(account => {
-          const Icon = account.kind === 'cash' ? Wallet : CreditCard;
           return (
-            <button key={account.id} onClick={() => setSelectedAccount(account)} className="w-full bg-card rounded-3xl p-5 border border-border shadow-sm text-left hover:border-primary/50 active:scale-[0.98] transition-all">
-              <div className="flex items-start justify-between gap-4 mb-5">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="h-11 w-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center"><Icon className="w-5 h-5" /></div>
-                  <div className="min-w-0">
-                    <p className="font-semibold truncate">{account.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{account.kind}</p>
-                  </div>
-                </div>
-                {account.qrImage ? <img src={account.qrImage} alt={`${account.name} QR code`} className="w-14 h-14 rounded-xl object-cover border border-border" /> : account.kind === 'bank' && <Banknote className="w-5 h-5 text-muted-foreground" />}
+            <button
+              key={account.id}
+              onClick={() => setSelectedAccount(account)}
+              className="w-full rounded-[24px] p-6 text-left text-white shadow-lg active:scale-[0.98] transition-all bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbcfe8]"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <p className="text-sm font-semibold truncate">{account.name}</p>
+                {account.qrImage ? (
+                  <img src={account.qrImage} alt={`${account.name} QR code`} className="w-8 h-8 rounded-lg object-cover border border-white/50" />
+                ) : (
+                  <CreditCard className="w-6 h-6 text-white" />
+                )}
               </div>
-              <p className="text-sm text-muted-foreground mb-1">Total Balance</p>
-              <p className="text-3xl font-bold text-foreground">{formatPeso(account.balance)}</p>
-              {account.kind === 'bank' && <p className="text-sm text-muted-foreground mt-3">{account.number || 'No account number'}</p>}
+              <p className="text-sm font-semibold text-white/90 mb-1">Balance</p>
+              <p className="text-3xl font-bold">{formatPeso(account.balance)}</p>
+              <p className="text-sm font-semibold text-white/90 mt-5">
+                {account.kind === 'cash' ? 'Cash' : account.number || 'No account number'}
+              </p>
             </button>
           );
         })}

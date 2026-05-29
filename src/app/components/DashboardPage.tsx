@@ -125,9 +125,25 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
               </div>
             )}
           </div>
-          <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground">
-            {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
-          </select>
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">Account</p>
+            <div className="grid grid-cols-2 gap-2">
+              {accounts.map(account => (
+                <button
+                  key={account.id}
+                  onClick={() => setAccountId(account.id)}
+                  className={`rounded-xl p-3 text-left border ${
+                    accountId === account.id
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted text-foreground'
+                  }`}
+                >
+                  <p className="text-sm font-semibold truncate">{account.name}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{account.kind}</p>
+                </button>
+              ))}
+            </div>
+          </div>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
           <button onClick={handleSubmit} className="w-full bg-primary text-white rounded-xl p-4 font-semibold hover:opacity-90 transition-opacity">
             Add {category.type === 'income' ? 'Income' : 'Expense'}
