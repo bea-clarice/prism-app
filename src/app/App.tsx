@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, ChevronDown, Home, ReceiptText, Settings, User, X } from 'lucide-react';
 import { AccountPage } from './components/AccountPage';
 import { AuthPage } from './components/AuthPage';
@@ -43,6 +43,8 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [ledgerPickerOpen, setLedgerPickerOpen] = useState(false);
+  const ledgerPickerRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -75,6 +77,21 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
+
+  useEffect(() => {
+    const closeHeaderMenus = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (ledgerPickerRef.current && !ledgerPickerRef.current.contains(target)) {
+        setLedgerPickerOpen(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(target)) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeHeaderMenus);
+    return () => document.removeEventListener('pointerdown', closeHeaderMenus);
+  }, []);
 
   useEffect(() => {
     if (isSessionLoading) return;
@@ -178,11 +195,12 @@ export default function App() {
 
   const addTransaction = (transaction: Omit<Transaction, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
-    const newTransaction: Transaction = { ...transaction, ledgerId: activeLedgerId, id: `t${Date.now()}` };
+    const delta = transaction.type === 'income' ? transaction.amount : -transaction.amount;
+    const accountBalanceAfter = (accounts.find(account => account.id === transaction.accountId && account.ledgerId === activeLedgerId)?.balance ?? 0) + delta;
+    const newTransaction: Transaction = { ...transaction, accountBalanceAfter, ledgerId: activeLedgerId, id: `t${Date.now()}` };
     setTransactions(prev => [newTransaction, ...prev]);
     setAccounts(prev => prev.map(account => {
       if (account.id !== transaction.accountId || account.ledgerId !== activeLedgerId) return account;
-      const delta = transaction.type === 'income' ? transaction.amount : -transaction.amount;
       return { ...account, balance: account.balance + delta };
     }));
   };
@@ -191,17 +209,28 @@ export default function App() {
     const currentTransaction = transactions.find(transaction => transaction.id === id);
     if (!currentTransaction || currentTransaction.ledgerId !== activeLedgerId) return;
 
+    const oldDelta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
+    const nextDelta = nextTransaction.type === 'income' ? nextTransaction.amount : -nextTransaction.amount;
+    const nextAccount = accounts.find(account => account.id === nextTransaction.accountId && account.ledgerId === currentTransaction.ledgerId);
+    const accountBalanceAfter = nextAccount
+      ? nextAccount.balance - (nextAccount.id === currentTransaction.accountId ? oldDelta : 0) + nextDelta
+      : nextTransaction.accountBalanceAfter;
+    const updatedTransaction: Transaction = {
+      ...nextTransaction,
+      accountBalanceAfter,
+      id,
+      ledgerId: currentTransaction.ledgerId,
+    };
+
     setTransactions(prev => prev.map(transaction => (
       transaction.id === id
-        ? { ...nextTransaction, id, ledgerId: currentTransaction.ledgerId }
+        ? updatedTransaction
         : transaction
     )));
 
     setAccounts(prev => prev.map(account => {
       if (account.ledgerId !== currentTransaction.ledgerId) return account;
 
-      const oldDelta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
-      const nextDelta = nextTransaction.type === 'income' ? nextTransaction.amount : -nextTransaction.amount;
       let balance = account.balance;
 
       if (account.id === currentTransaction.accountId) balance -= oldDelta;
@@ -285,9 +314,12 @@ export default function App() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold leading-none">Prism</p>
             {ledgers.length > 0 ? (
-              <div className="relative mt-1">
+              <div ref={ledgerPickerRef} className="relative mt-1">
                 <button
-                  onClick={() => setLedgerPickerOpen(open => !open)}
+                  onClick={() => {
+                    setLedgerPickerOpen(open => !open);
+                    setNotificationsOpen(false);
+                  }}
                   className="inline-flex max-w-full items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground"
                   aria-label="Choose ledger"
                 >
@@ -317,43 +349,48 @@ export default function App() {
               <p className="mt-1 text-xs text-muted-foreground">Add a ledger to begin</p>
             )}
           </div>
-          <button
-            onClick={() => setNotificationsOpen(open => !open)}
-            className="relative h-10 w-10 rounded-2xl bg-muted text-primary flex items-center justify-center"
-            aria-label="Recent notifications"
-          >
-            <Bell className="w-5 h-5" />
-            {billNotifications.length > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-xs flex items-center justify-center">
-                {billNotifications.length}
-              </span>
-            )}
-          </button>
-
-          {notificationsOpen && (
-            <div className="absolute right-6 top-full mt-2 w-72 bg-card border border-border rounded-2xl shadow-xl p-4 z-50">
-              <div className="flex items-center justify-between mb-3">
-                <p className="font-semibold">Recent notifications</p>
-                <button onClick={() => setNotificationsOpen(false)} className="p-1 rounded-lg bg-muted">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              {!notificationsEnabled ? (
-                <p className="text-sm text-muted-foreground">Bill reminders are turned off.</p>
-              ) : billNotifications.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No bill reminders right now.</p>
-              ) : (
-                <div className="space-y-2">
-                  {billNotifications.map(notification => (
-                    <div key={notification.id} className="rounded-xl bg-muted p-3">
-                      <p className="text-sm font-semibold">{notification.title}</p>
-                      <p className="text-xs text-muted-foreground">{notification.body} - {notification.dueDate}</p>
-                    </div>
-                  ))}
-                </div>
+          <div ref={notificationsRef}>
+            <button
+              onClick={() => {
+                setNotificationsOpen(open => !open);
+                setLedgerPickerOpen(false);
+              }}
+              className="relative h-10 w-10 rounded-2xl bg-muted text-primary flex items-center justify-center"
+              aria-label="Recent notifications"
+            >
+              <Bell className="w-5 h-5" />
+              {billNotifications.length > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-xs flex items-center justify-center">
+                  {billNotifications.length}
+                </span>
               )}
-            </div>
-          )}
+            </button>
+
+            {notificationsOpen && (
+              <div className="absolute right-6 top-full mt-2 w-72 bg-card border border-border rounded-2xl shadow-xl p-4 z-50">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-semibold">Recent notifications</p>
+                  <button onClick={() => setNotificationsOpen(false)} className="p-1 rounded-lg bg-muted">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {!notificationsEnabled ? (
+                  <p className="text-sm text-muted-foreground">Bill reminders are turned off.</p>
+                ) : billNotifications.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No bill reminders right now.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {billNotifications.map(notification => (
+                      <div key={notification.id} className="rounded-xl bg-muted p-3">
+                        <p className="text-sm font-semibold">{notification.title}</p>
+                        <p className="text-xs text-muted-foreground">{notification.body} - {notification.dueDate}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

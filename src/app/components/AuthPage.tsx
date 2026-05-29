@@ -21,8 +21,8 @@ export function AuthPage({ onGoogleAuth }: AuthPageProps) {
   return (
     <div className="min-h-screen px-6 py-10 flex items-center justify-center text-center bg-[radial-gradient(circle_at_top,#fbcfe8_0%,#fdf2f8_35%,#f8fafc_72%)] dark:bg-[radial-gradient(circle_at_top,#1e3a8a_0%,#071226_42%,#020617_100%)]">
       <div className="w-full max-w-md flex flex-col items-center">
-        <PrismLogo className="h-36 w-36 mb-6 drop-shadow-xl" />
-        <h1 className="text-5xl font-bold text-foreground leading-tight">Prism</h1>
+        <PrismLogo className="h-44 w-44 mb-6 drop-shadow-xl" />
+        <h1 className="text-5xl font-black font-sans text-pink-700 leading-tight tracking-normal">PRISM</h1>
         <p className="text-muted-foreground mt-3 mb-10">
           Refracting your finances with clarity.
         </p>

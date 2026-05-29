@@ -127,6 +127,7 @@ function EditTransactionModal({
 
   const today = new Date().toISOString().split('T')[0];
   const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  const balanceAfterTransaction = transaction.accountBalanceAfter ?? account.balance;
 
   const addPaymentItem = () => {
     setShowPaymentItems(true);
@@ -156,6 +157,7 @@ function EditTransactionModal({
             .map(item => ({ label: item.label.trim(), amount: parseFloat(item.amount) || 0 }))
             .filter(item => item.amount > 0)
         : undefined,
+      accountBalanceAfter: transaction.accountBalanceAfter,
       type: transaction.type,
       categoryId: transaction.categoryId,
       accountId,
@@ -171,7 +173,7 @@ function EditTransactionModal({
           <div>
             <h3 className="font-semibold">Transaction Details</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Your current balance is {formatPeso(account.balance)}.
+              Your current balance was {formatPeso(balanceAfterTransaction)} on this transaction.
             </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full bg-muted">

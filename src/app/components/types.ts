@@ -42,6 +42,7 @@ export interface Transaction {
   description: string;
   amount: number;
   paymentItems?: { label: string; amount: number }[];
+  accountBalanceAfter?: number;
   type: 'income' | 'expense';
   categoryId: string;
   accountId: string;
