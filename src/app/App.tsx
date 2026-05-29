@@ -1,98 +1,179 @@
-import { useState } from 'react';
-import { Home, User, Settings } from 'lucide-react';
-import { DashboardPage } from './components/DashboardPage';
+import { useMemo, useState } from 'react';
+import { Home, ReceiptText, Settings, User } from 'lucide-react';
 import { AccountPage } from './components/AccountPage';
+import { AuthPage } from './components/AuthPage';
+import { BillsPage } from './components/BillsPage';
+import { DashboardPage } from './components/DashboardPage';
+import { PrismLogo } from './components/PrismLogo';
 import { SettingsPage } from './components/SettingsPage';
-import type { Profile, Ledger, Account, Category, Transaction } from './components/types';
-
-const today = new Date().toISOString().split('T')[0];
-
-const initialLedgers: Ledger[] = [
-  { id: 'l1', name: 'Personal' },
-  { id: 'l2', name: 'Business' },
-];
-
-const initialAccounts: Account[] = [
-  { id: 'a1', name: 'Main Account', balance: 12450.32, number: '****6789' },
-  { id: 'a2', name: 'Savings', balance: 8900.00, number: '****1234' },
-  { id: 'a3', name: 'Investment', balance: 15600.50, number: '****5678' },
-];
-
-const initialCategories: Category[] = [
-  { id: 'c1', name: 'Salary', type: 'income', emoji: '💰', color: '#ec4899' },
-  { id: 'c2', name: 'Freelance', type: 'income', emoji: '💻', color: '#f472b6' },
-  { id: 'c3', name: 'Food', type: 'expense', emoji: '🍔', color: '#db2777' },
-  { id: 'c4', name: 'Transport', type: 'expense', emoji: '🚗', color: '#be185d' },
-  { id: 'c5', name: 'Entertainment', type: 'expense', emoji: '🎬', color: '#9d174d' },
-  { id: 'c6', name: 'Utilities', type: 'expense', emoji: '💡', color: '#831843' },
-];
-
-const initialTransactions: Transaction[] = [
-  { id: 't1', description: 'Monthly Salary', amount: 5456.67, type: 'income', categoryId: 'c1', accountId: 'a1', date: today },
-  { id: 't2', description: 'Grocery Shopping', amount: 234.50, type: 'expense', categoryId: 'c3', accountId: 'a1', date: today },
-  { id: 't3', description: 'Netflix', amount: 15.99, type: 'expense', categoryId: 'c5', accountId: 'a1', date: today },
-  { id: 't4', description: 'Freelance Project', amount: 1200.00, type: 'income', categoryId: 'c2', accountId: 'a2', date: today },
-  { id: 't5', description: 'Electric Bill', amount: 89.00, type: 'expense', categoryId: 'c6', accountId: 'a1', date: today },
-];
+import type { Account, Bill, Category, Ledger, Profile, Transaction } from './components/types';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [profile, setProfile] = useState<Profile>({ name: 'John Doe', email: 'john.doe@email.com' });
-  const [ledgers, setLedgers] = useState<Ledger[]>(initialLedgers);
-  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+  const [activeLedgerId, setActiveLedgerId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile>({
+    name: 'Google User',
+    email: 'google.user@gmail.com',
+    provider: 'firebase-google',
+  });
+  const [ledgers, setLedgers] = useState<Ledger[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [bills, setBills] = useState<Bill[]>([]);
 
-  const addTransaction = (t: Omit<Transaction, 'id'>) => {
-    const newT: Transaction = { ...t, id: `t${Date.now()}` };
-    setTransactions(prev => [newT, ...prev]);
-    setAccounts(prev => prev.map(a => {
-      if (a.id !== t.accountId) return a;
-      const delta = t.type === 'income' ? t.amount : -t.amount;
-      return { ...a, balance: a.balance + delta };
+  const activeLedger = ledgers.find(ledger => ledger.id === activeLedgerId) || null;
+
+  const ledgerData = useMemo(() => {
+    if (!activeLedgerId) {
+      return { accounts: [], categories: [], transactions: [], bills: [] };
+    }
+
+    return {
+      accounts: accounts.filter(account => account.ledgerId === activeLedgerId),
+      categories: categories.filter(category => category.ledgerId === activeLedgerId),
+      transactions: transactions.filter(transaction => transaction.ledgerId === activeLedgerId),
+      bills: bills.filter(bill => bill.ledgerId === activeLedgerId),
+    };
+  }, [accounts, activeLedgerId, bills, categories, transactions]);
+
+  const handleGoogleAuth = (nextProfile: Profile) => {
+    setProfile(nextProfile);
+    setIsAuthenticated(true);
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    setActiveTab('dashboard');
+  };
+
+  const addLedger = (name: string) => {
+    const ledger = { id: `l${Date.now()}`, name };
+    setLedgers(prev => [...prev, ledger]);
+    setActiveLedgerId(ledger.id);
+  };
+
+  const deleteLedger = (id: string) => {
+    setLedgers(prev => {
+      const next = prev.filter(ledger => ledger.id !== id);
+      if (activeLedgerId === id) {
+        setActiveLedgerId(next[0]?.id || null);
+      }
+      return next;
+    });
+    setAccounts(prev => prev.filter(account => account.ledgerId !== id));
+    setCategories(prev => prev.filter(category => category.ledgerId !== id));
+    setTransactions(prev => prev.filter(transaction => transaction.ledgerId !== id));
+    setBills(prev => prev.filter(bill => bill.ledgerId !== id));
+  };
+
+  const addTransaction = (transaction: Omit<Transaction, 'id' | 'ledgerId'>) => {
+    if (!activeLedgerId) return;
+    const newTransaction: Transaction = { ...transaction, ledgerId: activeLedgerId, id: `t${Date.now()}` };
+    setTransactions(prev => [newTransaction, ...prev]);
+    setAccounts(prev => prev.map(account => {
+      if (account.id !== transaction.accountId || account.ledgerId !== activeLedgerId) return account;
+      const delta = transaction.type === 'income' ? transaction.amount : -transaction.amount;
+      return { ...account, balance: account.balance + delta };
     }));
   };
 
-  const addLedger = (name: string) =>
-    setLedgers(prev => [...prev, { id: `l${Date.now()}`, name }]);
+  const addAccount = (account: Omit<Account, 'id' | 'ledgerId'>) => {
+    if (!activeLedgerId) return;
+    setAccounts(prev => [...prev, { ...account, ledgerId: activeLedgerId, id: `a${Date.now()}` }]);
+  };
 
-  const deleteLedger = (id: string) =>
-    setLedgers(prev => prev.filter(l => l.id !== id));
+  const deleteAccount = (id: string) => {
+    setAccounts(prev => prev.filter(account => account.id !== id));
+    setTransactions(prev => prev.filter(transaction => transaction.accountId !== id));
+  };
 
-  const addAccount = (a: Omit<Account, 'id'>) =>
-    setAccounts(prev => [...prev, { ...a, id: `a${Date.now()}` }]);
+  const addCategory = (category: Omit<Category, 'id' | 'ledgerId'>) => {
+    if (!activeLedgerId) return;
+    setCategories(prev => [...prev, { ...category, ledgerId: activeLedgerId, id: `c${Date.now()}` }]);
+  };
 
-  const deleteAccount = (id: string) =>
-    setAccounts(prev => prev.filter(a => a.id !== id));
+  const deleteCategory = (id: string) => {
+    setCategories(prev => prev.filter(category => category.id !== id));
+    setTransactions(prev => prev.filter(transaction => transaction.categoryId !== id));
+  };
 
-  const addCategory = (c: Omit<Category, 'id'>) =>
-    setCategories(prev => [...prev, { ...c, id: `c${Date.now()}` }]);
+  const addBill = (bill: Omit<Bill, 'id' | 'paid' | 'ledgerId'>) => {
+    if (!activeLedgerId) return;
+    setBills(prev => [{ ...bill, ledgerId: activeLedgerId, id: `b${Date.now()}`, paid: false }, ...prev]);
+  };
 
-  const deleteCategory = (id: string) =>
-    setCategories(prev => prev.filter(c => c.id !== id));
+  const toggleBillPaid = (id: string) =>
+    setBills(prev => prev.map(bill => bill.id === id ? { ...bill, paid: !bill.paid } : bill));
+
+  const deleteBill = (id: string) =>
+    setBills(prev => prev.filter(bill => bill.id !== id));
 
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: Home },
-    { key: 'account', label: 'Account', icon: User },
+    { key: 'account', label: 'Accounts', icon: User },
+    { key: 'bills', label: 'Bills', icon: ReceiptText },
     { key: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  if (!isAuthenticated) {
+    return <AuthPage onGoogleAuth={handleGoogleAuth} />;
+  }
+
   return (
     <div className="min-h-screen bg-background pb-24">
+      <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border">
+        <div className="max-w-md mx-auto px-6 py-3 flex items-center gap-3">
+          <PrismLogo className="h-9 w-9" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold leading-none">Prism</p>
+            {ledgers.length > 0 ? (
+              <select
+                value={activeLedgerId || ''}
+                onChange={event => setActiveLedgerId(event.target.value)}
+                className="mt-1 w-full bg-transparent text-xs text-muted-foreground outline-none"
+                aria-label="Active ledger"
+              >
+                {ledgers.map(ledger => (
+                  <option key={ledger.id} value={ledger.id}>{ledger.name}</option>
+                ))}
+              </select>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">Add a ledger to begin</p>
+            )}
+          </div>
+        </div>
+      </header>
+
       {activeTab === 'dashboard' && (
         <DashboardPage
-          categories={categories}
-          transactions={transactions}
-          accounts={accounts}
+          activeLedger={activeLedger}
+          categories={ledgerData.categories}
+          transactions={ledgerData.transactions}
+          accounts={ledgerData.accounts}
           onAddTransaction={addTransaction}
+          onAddCategory={addCategory}
         />
       )}
 
       {activeTab === 'account' && (
         <AccountPage
-          accounts={accounts}
-          transactions={transactions}
-          categories={categories}
+          activeLedger={activeLedger}
+          accounts={ledgerData.accounts}
+          transactions={ledgerData.transactions}
+          categories={ledgerData.categories}
+          onAddAccount={addAccount}
+        />
+      )}
+
+      {activeTab === 'bills' && (
+        <BillsPage
+          activeLedger={activeLedger}
+          bills={ledgerData.bills}
+          onAddBill={addBill}
+          onTogglePaid={toggleBillPaid}
+          onDeleteBill={deleteBill}
         />
       )}
 
@@ -100,8 +181,10 @@ export default function App() {
         <SettingsPage
           profile={profile}
           ledgers={ledgers}
-          accounts={accounts}
-          categories={categories}
+          activeLedgerId={activeLedgerId}
+          accounts={ledgerData.accounts}
+          categories={ledgerData.categories}
+          onSelectLedger={setActiveLedgerId}
           onUpdateProfile={setProfile}
           onAddLedger={addLedger}
           onDeleteLedger={deleteLedger}
@@ -109,12 +192,12 @@ export default function App() {
           onDeleteAccount={deleteAccount}
           onAddCategory={addCategory}
           onDeleteCategory={deleteCategory}
+          onLogout={logout}
         />
       )}
 
-      {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-card border-t border-border z-40">
-        <div className="max-w-md mx-auto px-6 py-3">
+        <div className="max-w-md mx-auto px-4 py-3">
           <div className="flex items-center justify-around">
             {navItems.map(({ key, label, icon: Icon }) => (
               <button

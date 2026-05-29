@@ -1,116 +1,123 @@
-import { useState } from 'react';
-import { Plus, Trash2, ChevronRight, Check, X } from 'lucide-react';
-import type { Profile, Ledger, Account, Category } from './types';
+import { useEffect, useState } from 'react';
+import { Check, ImagePlus, LogOut, Plus, Trash2, X } from 'lucide-react';
+import type { ReactNode } from 'react';
+import type { Account, Category, Ledger, Profile } from './types';
 
 interface SettingsPageProps {
   profile: Profile;
   ledgers: Ledger[];
   accounts: Account[];
   categories: Category[];
-  onUpdateProfile: (p: Profile) => void;
+  onUpdateProfile: (profile: Profile) => void;
   onAddLedger: (name: string) => void;
   onDeleteLedger: (id: string) => void;
-  onAddAccount: (a: Omit<Account, 'id'>) => void;
+  onAddAccount: (account: Omit<Account, 'id'>) => void;
   onDeleteAccount: (id: string) => void;
-  onAddCategory: (c: Omit<Category, 'id'>) => void;
+  onAddCategory: (category: Omit<Category, 'id'>) => void;
   onDeleteCategory: (id: string) => void;
+  onLogout: () => void;
 }
 
-/* ─── Profile ─────────────────────────────────────────────────── */
-function ProfileSection({ profile, onUpdate }: { profile: Profile; onUpdate: (p: Profile) => void }) {
+const money = (value: number) =>
+  `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const CATEGORY_MARKS = ['$', '<>', 'F', 'T', 'H', 'B', 'U', 'S', 'M', 'G', 'R', 'L'];
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="bg-card rounded-3xl p-6 shadow-sm border border-border mb-4">
+      <h3 className="font-semibold mb-4">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function ProfileSection({ profile, onUpdate }: { profile: Profile; onUpdate: (profile: Profile) => void }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(profile.name);
-  const [email, setEmail] = useState(profile.email);
 
   const initials = profile.name
     .split(' ')
-    .map(n => n[0] || '')
+    .map(part => part[0] || '')
     .join('')
     .slice(0, 2)
     .toUpperCase();
 
   const handleSave = () => {
     if (name.trim()) {
-      onUpdate({ name: name.trim(), email: email.trim() });
+      onUpdate({ ...profile, name: name.trim() });
+      setEditing(false);
     }
-    setEditing(false);
-  };
-
-  const handleCancel = () => {
-    setName(profile.name);
-    setEmail(profile.email);
-    setEditing(false);
   };
 
   return (
-    <div className="bg-card rounded-3xl p-6 shadow-sm border border-border mb-4">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Profile</h3>
-        {editing ? (
-          <div className="flex gap-2">
-            <button onClick={handleSave} className="text-primary text-sm font-medium flex items-center gap-1">
-              <Check className="w-4 h-4" /> Save
-            </button>
-            <button onClick={handleCancel} className="text-muted-foreground text-sm">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <button onClick={() => setEditing(true)} className="text-primary text-sm font-medium">Edit</button>
-        )}
-      </div>
+    <Section title="Profile">
       <div className="flex items-center gap-4">
         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-          {initials}
+          {profile.photoUrl ? <img src={profile.photoUrl} alt="" className="w-full h-full rounded-full object-cover" /> : initials}
         </div>
-        {editing ? (
-          <div className="flex-1 space-y-2">
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Full name"
-              autoFocus
-              className="w-full bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground"
-            />
-            <input
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="Email address"
-              type="email"
-              className="w-full bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground"
-            />
-          </div>
-        ) : (
-          <div>
-            <p className="font-semibold">{profile.name}</p>
-            <p className="text-sm text-muted-foreground">{profile.email}</p>
-          </div>
-        )}
+        <div className="flex-1 min-w-0">
+          {editing ? (
+            <div className="flex gap-2">
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                autoFocus
+                placeholder="Full name"
+                className="min-w-0 flex-1 bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground"
+              />
+              <button onClick={handleSave} className="bg-primary text-white rounded-xl px-3">
+                <Check className="w-4 h-4" />
+              </button>
+              <button onClick={() => setEditing(false)} className="bg-muted rounded-xl px-3">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold truncate">{profile.name}</p>
+                <p className="text-sm text-muted-foreground truncate">{profile.email}</p>
+                <p className="text-xs text-primary mt-1">Firebase Google email</p>
+              </div>
+              <button onClick={() => setEditing(true)} className="text-primary text-sm font-medium">
+                Edit
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </Section>
   );
 }
 
-/* ─── Ledger Manager ──────────────────────────────────────────── */
 function LedgerManager({
-  ledgers, onAdd, onDelete
-}: { ledgers: Ledger[]; onAdd: (n: string) => void; onDelete: (id: string) => void }) {
+  ledgers,
+  onAdd,
+  onDelete,
+}: {
+  ledgers: Ledger[];
+  onAdd: (name: string) => void;
+  onDelete: (id: string) => void;
+}) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
 
   const handleAdd = () => {
-    if (name.trim()) { onAdd(name.trim()); setName(''); setAdding(false); }
+    if (!name.trim()) return;
+    onAdd(name.trim());
+    setName('');
+    setAdding(false);
   };
 
   return (
-    <div className="bg-card rounded-3xl p-6 shadow-sm border border-border mb-4">
+    <Section title="Ledger Manager">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Ledger Manager</h3>
+        <p className="text-sm text-muted-foreground">Manage ledgers</p>
         <button onClick={() => setAdding(v => !v)} className="text-primary text-sm font-medium flex items-center gap-1">
           <Plus className="w-4 h-4" /> Add
         </button>
       </div>
-
       {adding && (
         <div className="flex gap-2 mb-4">
           <input
@@ -124,251 +131,287 @@ function LedgerManager({
           <button onClick={handleAdd} className="bg-primary text-white rounded-xl px-3">
             <Check className="w-4 h-4" />
           </button>
-          <button onClick={() => { setAdding(false); setName(''); }} className="bg-muted rounded-xl px-3">
-            <X className="w-4 h-4" />
-          </button>
         </div>
       )}
-
       <div className="space-y-1">
-        {ledgers.map(l => (
-          <div key={l.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-            <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-lg">📒</span>
-              <span className="font-medium text-sm">{l.name}</span>
-            </div>
-            <button onClick={() => onDelete(l.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity">
+        {ledgers.map(ledger => (
+          <div key={ledger.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+            <span className="font-medium text-sm">{ledger.name}</span>
+            <button onClick={() => onDelete(ledger.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
         ))}
-        {ledgers.length === 0 && (
-          <p className="text-muted-foreground text-sm text-center py-3">No ledgers yet</p>
-        )}
+        {ledgers.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No ledgers yet</p>}
       </div>
-    </div>
+    </Section>
   );
 }
 
-/* ─── Account Manager ─────────────────────────────────────────── */
 function AccountManager({
-  accounts, onAdd, onDelete
-}: { accounts: Account[]; onAdd: (a: Omit<Account, 'id'>) => void; onDelete: (id: string) => void }) {
+  accounts,
+  onAdd,
+  onDelete,
+}: {
+  accounts: Account[];
+  onAdd: (account: Omit<Account, 'id'>) => void;
+  onDelete: (id: string) => void;
+}) {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: '', balance: '', number: '' });
+  const [form, setForm] = useState({
+    kind: 'bank' as Account['kind'],
+    name: '',
+    balance: '',
+    number: '',
+    qrImage: '',
+  });
+
+  const handleFileChange = (file?: File) => {
+    if (!file || !['image/jpeg', 'image/png'].includes(file.type)) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm(f => ({ ...f, qrImage: String(reader.result) }));
+    reader.readAsDataURL(file);
+  };
 
   const handleAdd = () => {
-    const bal = parseFloat(form.balance);
-    if (form.name.trim() && !isNaN(bal)) {
-      onAdd({ name: form.name.trim(), balance: bal, number: form.number.trim() || '****0000' });
-      setForm({ name: '', balance: '', number: '' });
-      setAdding(false);
-    }
+    const balance = parseFloat(form.balance);
+    if (!form.name.trim() || isNaN(balance)) return;
+    onAdd({
+      kind: form.kind,
+      name: form.name.trim(),
+      balance,
+      number: form.kind === 'bank' ? form.number.trim() : form.number.trim() || undefined,
+      qrImage: form.kind === 'bank' ? form.qrImage : undefined,
+    });
+    setForm({ kind: 'bank', name: '', balance: '', number: '', qrImage: '' });
+    setAdding(false);
   };
 
   return (
-    <div className="bg-card rounded-3xl p-6 shadow-sm border border-border mb-4">
+    <Section title="Account Manager">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Account Manager</h3>
+        <p className="text-sm text-muted-foreground">Bank or Cash</p>
         <button onClick={() => setAdding(v => !v)} className="text-primary text-sm font-medium flex items-center gap-1">
           <Plus className="w-4 h-4" /> Add
         </button>
       </div>
 
       {adding && (
-        <div className="bg-muted rounded-2xl p-4 mb-4 space-y-2">
+        <div className="bg-muted rounded-2xl p-4 mb-4 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {(['bank', 'cash'] as const).map(kind => (
+              <button
+                key={kind}
+                onClick={() => setForm(f => ({ ...f, kind }))}
+                className={`py-2 rounded-xl text-sm font-medium capitalize ${
+                  form.kind === kind ? 'bg-primary text-white' : 'bg-card text-muted-foreground'
+                }`}
+              >
+                {kind}
+              </button>
+            ))}
+          </div>
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             placeholder="Account name"
-            autoFocus
             className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground"
           />
           <input
             type="number"
             value={form.balance}
             onChange={e => setForm(f => ({ ...f, balance: e.target.value }))}
-            placeholder="Starting balance"
+            placeholder="Balance"
             className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground"
           />
           <input
             value={form.number}
             onChange={e => setForm(f => ({ ...f, number: e.target.value }))}
-            placeholder="Account number (e.g. ****1234)"
+            placeholder={form.kind === 'bank' ? 'Account number' : 'Account number optional'}
             className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground"
           />
-          <div className="flex gap-2 pt-1">
-            <button onClick={handleAdd} className="flex-1 bg-primary text-white rounded-xl py-2 text-sm font-medium">
-              Add Account
-            </button>
-            <button onClick={() => setAdding(false)} className="bg-card rounded-xl px-4 py-2 text-sm">
-              Cancel
-            </button>
-          </div>
+          {form.kind === 'bank' && (
+            <label className="block bg-card rounded-xl p-3 cursor-pointer">
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                onChange={e => handleFileChange(e.target.files?.[0])}
+                className="hidden"
+              />
+              <div className="flex items-center gap-3">
+                <ImagePlus className="w-5 h-5 text-primary" />
+                <span className="text-sm">Insert QR image optional</span>
+              </div>
+              {form.qrImage && (
+                <img src={form.qrImage} alt="QR preview" className="mt-3 w-20 h-20 rounded-xl object-cover border border-border" />
+              )}
+            </label>
+          )}
+          <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">
+            Add Account
+          </button>
         </div>
       )}
 
       <div className="space-y-1">
-        {accounts.map(a => (
-          <div key={a.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-            <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-lg">💳</span>
-              <div>
-                <p className="font-medium text-sm">{a.name}</p>
-                <p className="text-xs text-muted-foreground">{a.number} · ${a.balance.toFixed(2)}</p>
-              </div>
+        {accounts.map(account => (
+          <div key={account.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate">{account.name}</p>
+              <p className="text-xs text-muted-foreground capitalize">
+                {account.kind} - {money(account.balance)}{account.number ? ` - ${account.number}` : ''}
+              </p>
             </div>
-            <button onClick={() => onDelete(a.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity">
+            <button onClick={() => onDelete(account.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
         ))}
-        {accounts.length === 0 && (
-          <p className="text-muted-foreground text-sm text-center py-3">No accounts yet</p>
-        )}
+        {accounts.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No accounts yet</p>}
       </div>
-    </div>
+    </Section>
   );
 }
 
-/* ─── Category Manager ────────────────────────────────────────── */
-const EMOJI_OPTIONS = ['💰', '💻', '🍔', '🚗', '🎬', '💡', '🏠', '👗', '✈️', '💊', '🎮', '📚', '🏋️', '☕', '🛒', '🎁', '🏦', '🎵', '🐾', '🌿'];
-
 function CategoryManager({
-  categories, onAdd, onDelete
-}: { categories: Category[]; onAdd: (c: Omit<Category, 'id'>) => void; onDelete: (id: string) => void }) {
+  categories,
+  onAdd,
+  onDelete,
+}: {
+  categories: Category[];
+  onAdd: (category: Omit<Category, 'id'>) => void;
+  onDelete: (id: string) => void;
+}) {
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: '', type: 'expense' as 'income' | 'expense', emoji: '💰', color: '#ec4899' });
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('expense');
+  const [form, setForm] = useState({
+    name: '',
+    type: 'expense' as Category['type'],
+    emoji: CATEGORY_MARKS[0],
+    color: '#ec4899',
+  });
 
   const handleAdd = () => {
-    if (form.name.trim()) {
-      onAdd({ ...form, name: form.name.trim() });
-      setForm({ name: '', type: 'expense', emoji: '💰', color: '#ec4899' });
-      setAdding(false);
-    }
+    if (!form.name.trim()) return;
+    onAdd({
+      ...form,
+      name: form.name.trim(),
+      color: form.type === 'income' ? '#16a34a' : '#e11d48',
+    });
+    setForm({ name: '', type: 'expense', emoji: CATEGORY_MARKS[0], color: '#ec4899' });
+    setAdding(false);
   };
 
-  const displayed = categories.filter(c => c.type === activeTab);
-  const incomeCount = categories.filter(c => c.type === 'income').length;
-  const expenseCount = categories.filter(c => c.type === 'expense').length;
+  const displayed = categories.filter(category => category.type === activeTab);
+  const incomeCount = categories.filter(category => category.type === 'income').length;
+  const expenseCount = categories.filter(category => category.type === 'expense').length;
 
   return (
-    <div className="bg-card rounded-3xl p-6 shadow-sm border border-border mb-4">
+    <Section title="Category Manager">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold">Category Manager</h3>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('income')}
+            className={`px-3 py-2 rounded-xl text-sm ${activeTab === 'income' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}
+          >
+            Income ({incomeCount})
+          </button>
+          <button
+            onClick={() => setActiveTab('expense')}
+            className={`px-3 py-2 rounded-xl text-sm ${activeTab === 'expense' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}
+          >
+            Expense ({expenseCount})
+          </button>
+        </div>
         <button onClick={() => setAdding(v => !v)} className="text-primary text-sm font-medium flex items-center gap-1">
           <Plus className="w-4 h-4" /> Add
         </button>
       </div>
 
-      {/* Tab switcher */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setActiveTab('income')}
-          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
-            activeTab === 'income' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'
-          }`}
-        >
-          Income ({incomeCount})
-        </button>
-        <button
-          onClick={() => setActiveTab('expense')}
-          className={`flex-1 py-2 rounded-xl text-sm font-medium transition-colors ${
-            activeTab === 'expense' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'
-          }`}
-        >
-          Expense ({expenseCount})
-        </button>
-      </div>
-
       {adding && (
         <div className="bg-muted rounded-2xl p-4 mb-4 space-y-3">
-          {/* Type toggle */}
-          <div className="flex gap-2">
-            {(['income', 'expense'] as const).map(t => (
+          <div className="grid grid-cols-2 gap-2">
+            {(['income', 'expense'] as const).map(type => (
               <button
-                key={t}
-                onClick={() => setForm(f => ({ ...f, type: t }))}
-                className={`flex-1 py-2 rounded-xl text-sm font-medium capitalize transition-colors ${
-                  form.type === t ? 'bg-primary text-white' : 'bg-card text-muted-foreground'
+                key={type}
+                onClick={() => setForm(f => ({ ...f, type }))}
+                className={`py-2 rounded-xl text-sm font-medium capitalize ${
+                  form.type === type ? 'bg-primary text-white' : 'bg-card text-muted-foreground'
                 }`}
               >
-                {t}
+                {type}
               </button>
             ))}
           </div>
-
           <input
             value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             placeholder="Category name"
-            autoFocus
             className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground"
           />
-
-          <div>
-            <p className="text-xs text-muted-foreground mb-2">Choose an emoji</p>
-            <div className="grid grid-cols-10 gap-1">
-              {EMOJI_OPTIONS.map(emoji => (
-                <button
-                  key={emoji}
-                  onClick={() => setForm(f => ({ ...f, emoji }))}
-                  className={`h-8 w-full rounded-lg text-base flex items-center justify-center transition-colors ${
-                    form.emoji === emoji ? 'bg-primary/20 ring-2 ring-primary' : 'hover:bg-card'
-                  }`}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-6 gap-2">
+            {CATEGORY_MARKS.map(mark => (
+              <button
+                key={mark}
+                onClick={() => setForm(f => ({ ...f, emoji: mark }))}
+                className={`h-9 rounded-xl text-sm font-semibold ${
+                  form.emoji === mark ? 'bg-primary text-white' : 'bg-card text-muted-foreground'
+                }`}
+              >
+                {mark}
+              </button>
+            ))}
           </div>
-
-          <div className="flex gap-2">
-            <button onClick={handleAdd} className="flex-1 bg-primary text-white rounded-xl py-2 text-sm font-medium">
-              Add Category
-            </button>
-            <button onClick={() => setAdding(false)} className="bg-card rounded-xl px-4 py-2 text-sm">
-              Cancel
-            </button>
-          </div>
+          <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">
+            Add Category
+          </button>
         </div>
       )}
 
       <div className="space-y-1">
-        {displayed.map(cat => (
-          <div key={cat.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+        {displayed.map(category => (
+          <div key={category.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
             <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-lg">{cat.emoji}</span>
-              <span className="font-medium text-sm">{cat.name}</span>
+              <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
+                {category.emoji}
+              </span>
+              <span className="font-medium text-sm">{category.name}</span>
             </div>
-            <button onClick={() => onDelete(cat.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity">
+            <button onClick={() => onDelete(category.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
         ))}
-        {displayed.length === 0 && (
-          <p className="text-muted-foreground text-sm text-center py-3">No {activeTab} categories yet</p>
-        )}
+        {displayed.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No {activeTab} categories yet</p>}
       </div>
-    </div>
+    </Section>
   );
 }
 
-/* ─── Settings Page ───────────────────────────────────────────── */
 export function SettingsPage({
-  profile, ledgers, accounts, categories,
-  onUpdateProfile, onAddLedger, onDeleteLedger,
-  onAddAccount, onDeleteAccount, onAddCategory, onDeleteCategory,
+  profile,
+  ledgers,
+  accounts,
+  categories,
+  onUpdateProfile,
+  onAddLedger,
+  onDeleteLedger,
+  onAddAccount,
+  onDeleteAccount,
+  onAddCategory,
+  onDeleteCategory,
+  onLogout,
 }: SettingsPageProps) {
   const [notifications, setNotifications] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
-  const [biometric, setBiometric] = useState(true);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
 
   const toggles = [
     { label: 'Notifications', value: notifications, set: setNotifications },
     { label: 'Dark Mode', value: darkMode, set: setDarkMode },
-    { label: 'Biometric Login', value: biometric, set: setBiometric },
   ];
 
   return (
@@ -380,39 +423,30 @@ export function SettingsPage({
       <AccountManager accounts={accounts} onAdd={onAddAccount} onDelete={onDeleteAccount} />
       <CategoryManager categories={categories} onAdd={onAddCategory} onDelete={onDeleteCategory} />
 
-      {/* Preferences */}
-      <div className="bg-card rounded-3xl p-6 shadow-sm border border-border mb-4">
-        <h3 className="font-semibold mb-4">Preferences</h3>
+      <Section title="Preferences">
         <div className="space-y-1">
           {toggles.map(({ label, value, set }) => (
             <div key={label} className="flex items-center justify-between py-3 border-b border-border last:border-0">
               <span>{label}</span>
               <button
-                onClick={() => set(v => !v)}
+                onClick={() => set(value => !value)}
                 className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${value ? 'bg-primary' : 'bg-muted'}`}
+                aria-label={label}
               >
                 <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all duration-200 ${value ? 'right-0.5' : 'left-0.5'}`} />
               </button>
             </div>
           ))}
         </div>
-      </div>
+      </Section>
 
-      {/* Other */}
-      <div className="bg-card rounded-3xl p-6 shadow-sm border border-border">
-        <h3 className="font-semibold mb-4">Other</h3>
-        <div className="space-y-1">
-          {['Privacy Policy', 'Terms of Service', 'Help & Support'].map(item => (
-            <button key={item} className="w-full text-left py-3 flex items-center justify-between hover:text-primary transition-colors border-b border-border last:border-0">
-              <span>{item}</span>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
-            </button>
-          ))}
-          <button className="w-full text-left py-3 text-destructive hover:opacity-80 transition-opacity">
-            Logout
-          </button>
-        </div>
-      </div>
+      <button
+        onClick={onLogout}
+        className="w-full bg-card border border-border rounded-3xl p-4 text-destructive font-semibold flex items-center justify-center gap-2"
+      >
+        <LogOut className="w-5 h-5" />
+        Logout
+      </button>
     </div>
   );
 }
