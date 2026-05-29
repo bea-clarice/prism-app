@@ -39,11 +39,28 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransactionModalProps) {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
+  const [showPaymentItems, setShowPaymentItems] = useState(false);
+  const [paymentItems, setPaymentItems] = useState<{ label: string; amount: string }[]>([]);
   const [accountId, setAccountId] = useState(accounts[0]?.id || '');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
+  const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+
+  const addPaymentItem = () => {
+    setShowPaymentItems(true);
+    setPaymentItems(prev => [...prev, { label: '', amount: '' }]);
+  };
+
+  const updatePaymentItem = (index: number, key: 'label' | 'amount', value: string) => {
+    setPaymentItems(prev => prev.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item));
+  };
+
+  const removePaymentItem = (index: number) => {
+    setPaymentItems(prev => prev.filter((_, itemIndex) => itemIndex !== index));
+  };
+
   const handleSubmit = () => {
-    const parsed = parseFloat(amount);
+    const parsed = showPaymentItems && paymentItems.length > 0 ? itemizedTotal : parseFloat(amount);
     if (!parsed || !accountId) return;
     onAdd({
       description: description.trim() || category.name,
@@ -75,8 +92,39 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
         </div>
 
         <div className="space-y-4">
-          <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" autoFocus className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          {!showPaymentItems && (
+            <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount" autoFocus className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          )}
           <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Description optional" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          <div className="rounded-2xl bg-muted p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Add payments together</p>
+                <p className="text-xs text-muted-foreground">Optional itemized total for one transaction.</p>
+              </div>
+              <button onClick={addPaymentItem} className="bg-card text-primary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
+                <Plus className="w-4 h-4" />
+                Add
+              </button>
+            </div>
+            {showPaymentItems && (
+              <div className="mt-3 space-y-2">
+                {paymentItems.map((item, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_96px_32px] gap-2">
+                    <input value={item.label} onChange={e => updatePaymentItem(index, 'label', e.target.value)} placeholder="Vehicle" className="min-w-0 bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                    <input type="number" min="0" step="0.01" value={item.amount} onChange={e => updatePaymentItem(index, 'amount', e.target.value)} placeholder="0.00" className="bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                    <button onClick={() => removePaymentItem(index)} className="bg-card rounded-xl text-rose-500 flex items-center justify-center">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between text-sm pt-1">
+                  <span className="text-muted-foreground">Computed total</span>
+                  <span className="font-semibold">{formatPeso(itemizedTotal)}</span>
+                </div>
+              </div>
+            )}
+          </div>
           <select value={accountId} onChange={e => setAccountId(e.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground">
             {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
           </select>

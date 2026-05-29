@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, ImagePlus, LogOut, Plus, Trash2, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { CategoryIcon, CATEGORY_ICON_OPTIONS } from './category-icons/CategoryIcon';
@@ -19,6 +19,10 @@ interface SettingsPageProps {
   onDeleteAccount: (id: string) => void;
   onAddCategory: (category: Omit<Category, 'id' | 'ledgerId'>) => void;
   onDeleteCategory: (id: string) => void;
+  notificationsEnabled: boolean;
+  onSetNotificationsEnabled: (value: boolean) => void;
+  darkMode: boolean;
+  onSetDarkMode: (value: boolean) => void;
   onLogout: () => void;
 }
 
@@ -230,17 +234,10 @@ function CategoryManager({ categories, canAdd, onAdd, onDelete }: { categories: 
   );
 }
 
-export function SettingsPage({ profile, ledgers, activeLedgerId, accounts, categories, onSelectLedger, onUpdateProfile, onAddLedger, onDeleteLedger, onAddAccount, onDeleteAccount, onAddCategory, onDeleteCategory, onLogout }: SettingsPageProps) {
-  const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode);
-  }, [darkMode]);
-
+export function SettingsPage({ profile, ledgers, activeLedgerId, accounts, categories, onSelectLedger, onUpdateProfile, onAddLedger, onDeleteLedger, onAddAccount, onDeleteAccount, onAddCategory, onDeleteCategory, notificationsEnabled, onSetNotificationsEnabled, darkMode, onSetDarkMode, onLogout }: SettingsPageProps) {
   const toggles = [
-    { label: 'Notifications', value: notifications, set: setNotifications },
-    { label: 'Dark Mode', value: darkMode, set: setDarkMode },
+    { label: 'Notifications', value: notificationsEnabled, set: onSetNotificationsEnabled },
+    { label: 'Dark Mode', value: darkMode, set: onSetDarkMode },
   ];
 
   return (
@@ -256,7 +253,7 @@ export function SettingsPage({ profile, ledgers, activeLedgerId, accounts, categ
           {toggles.map(({ label, value, set }) => (
             <div key={label} className="flex items-center justify-between py-3 border-b border-border last:border-0">
               <span>{label}</span>
-              <button onClick={() => set(current => !current)} className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${value ? 'bg-primary' : 'bg-muted'}`} aria-label={label}>
+              <button onClick={() => set(!value)} className={`w-12 h-6 rounded-full relative transition-colors duration-200 ${value ? 'bg-primary' : 'bg-muted'}`} aria-label={label}>
                 <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-all duration-200 ${value ? 'right-0.5' : 'left-0.5'}`} />
               </button>
             </div>

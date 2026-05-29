@@ -98,6 +98,7 @@ function AddAccountModal({ onAdd, onClose }: { onAdd: (account: Omit<Account, 'i
 
 function AccountDetailView({ account, transactions, categories, onBack }: { account: Account; transactions: Transaction[]; categories: Category[]; onBack: () => void }) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [showQr, setShowQr] = useState(false);
 
   const selectedDateStr = selectedDate
     ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
@@ -145,7 +146,11 @@ function AccountDetailView({ account, transactions, categories, onBack }: { acco
             <p className="text-muted-foreground text-sm capitalize">{account.kind}{account.number ? ` - ${account.number}` : ''}</p>
             <p className="text-3xl font-bold text-primary mt-2">{formatPeso(account.balance)}</p>
           </div>
-          {account.qrImage && <img src={account.qrImage} alt={`${account.name} QR code`} className="w-20 h-20 rounded-2xl object-cover border border-border" />}
+          {account.qrImage && (
+            <button onClick={() => setShowQr(true)} className="w-20 h-20 rounded-2xl border border-border overflow-hidden">
+              <img src={account.qrImage} alt={`${account.name} QR code`} className="w-full h-full object-cover" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -205,6 +210,20 @@ function AccountDetailView({ account, transactions, categories, onBack }: { acco
         <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Transaction History</h3>
         {accountTransactions.length === 0 ? <EmptyState title="No transaction history yet" body="Add transactions from dashboard categories to display data." /> : <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">{accountTransactions.map((t, i) => renderTransaction(t, i < accountTransactions.length - 1))}</div>}
       </div>
+
+      {showQr && account.qrImage && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6" onClick={() => setShowQr(false)}>
+          <div className="bg-card rounded-3xl p-5 w-full max-w-sm" onClick={event => event.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-semibold">{account.name} QR Code</p>
+              <button onClick={() => setShowQr(false)} className="p-2 rounded-full bg-muted">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img src={account.qrImage} alt={`${account.name} QR code`} className="w-full aspect-square object-contain rounded-2xl bg-white p-3" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
