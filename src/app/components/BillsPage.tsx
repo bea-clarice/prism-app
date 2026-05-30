@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react';
 import { CalendarClock, Check, ChevronDown, Plus, Trash2, X } from 'lucide-react';
-import type { Bill, Ledger } from './types';
-import { formatPeso } from '../utils/format';
+import type { Account, Bill, Ledger } from './types';
+import { formatPeso, getPhilippineDateString } from '../utils/format';
 
 interface BillsPageProps {
   activeLedger: Ledger | null;
   bills: Bill[];
+  accounts: Account[];
   onAddBill: (bill: Omit<Bill, 'id' | 'paid' | 'ledgerId'>) => void;
-  onTogglePaid: (id: string) => void;
+  onMarkPaid: (id: string, payment: { paidBy: 'account' | 'other'; accountId?: string }) => void;
   onDeleteBill: (id: string) => void;
 }
 
-const today = new Date().toISOString().split('T')[0];
+const today = getPhilippineDateString();
 
 const recurringOptions: { value: Bill['recurring']; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
@@ -36,9 +37,83 @@ function getBillStatus(bill: Bill) {
   return { label: 'Unpaid', className: 'bg-amber-50 text-amber-700 border-amber-100' };
 }
 
-export function BillsPage({ activeLedger, bills, onAddBill, onTogglePaid, onDeleteBill }: BillsPageProps) {
+function PayBillModal({
+  bill,
+  accounts,
+  onClose,
+  onMarkPaid,
+}: {
+  bill: Bill;
+  accounts: Account[];
+  onClose: () => void;
+  onMarkPaid: (payment: { paidBy: 'account' | 'other'; accountId?: string }) => void;
+}) {
+  const [paidBy, setPaidBy] = useState<'account' | 'other'>(accounts.length > 0 ? 'account' : 'other');
+  const [accountId, setAccountId] = useState(accounts[0]?.id || '');
+
+  const handleConfirm = () => {
+    if (paidBy === 'account' && !accountId) return;
+    onMarkPaid({ paidBy, accountId: paidBy === 'account' ? accountId : undefined });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={onClose}>
+      <div className="bg-card rounded-t-3xl p-6 w-full max-w-md mx-auto pb-10" onClick={event => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h3 className="font-semibold">Mark Bill Paid</h3>
+            <p className="text-sm text-muted-foreground mt-1">{bill.name} - {formatPeso(bill.amount)}</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full bg-muted"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setPaidBy('account')} disabled={accounts.length === 0} className={`rounded-xl p-3 text-sm font-semibold disabled:opacity-40 ${paidBy === 'account' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              My account
+            </button>
+            <button onClick={() => setPaidBy('other')} className={`rounded-xl p-3 text-sm font-semibold ${paidBy === 'other' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+              Other
+            </button>
+          </div>
+
+          {paidBy === 'account' ? (
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Deduct from</p>
+              <div className="grid grid-cols-2 gap-2">
+                {accounts.map(account => (
+                  <button
+                    key={account.id}
+                    onClick={() => setAccountId(account.id)}
+                    className={`rounded-xl p-3 text-left border ${
+                      accountId === account.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-foreground'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold truncate">{account.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatPeso(account.balance)}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-muted p-4 text-sm text-muted-foreground">
+              This bill will be tracked as paid, but it will not deduct from your balance.
+            </div>
+          )}
+
+          <button onClick={handleConfirm} className="w-full bg-primary text-primary-foreground rounded-xl p-3 font-semibold">
+            Mark Paid
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function BillsPage({ activeLedger, bills, accounts, onAddBill, onMarkPaid, onDeleteBill }: BillsPageProps) {
   const [adding, setAdding] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
+  const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [form, setForm] = useState({
     name: '',
     amount: '',
@@ -126,6 +201,11 @@ export function BillsPage({ activeLedger, bills, onAddBill, onTogglePaid, onDele
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1"><CalendarClock className="w-4 h-4 text-primary flex-shrink-0" /><p className="font-semibold truncate">{bill.name}</p></div>
                   <p className="text-sm text-muted-foreground">Due {new Date(`${bill.dueDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - {recurring}</p>
+                  {bill.paid && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Paid by {bill.paidBy === 'other' ? 'Other' : accounts.find(account => account.id === bill.paidAccountId)?.name || 'account'}
+                    </p>
+                  )}
                 </div>
                 <p className="font-semibold">{formatPeso(bill.amount)}</p>
               </div>
@@ -133,7 +213,7 @@ export function BillsPage({ activeLedger, bills, onAddBill, onTogglePaid, onDele
                 <span className={`text-xs px-3 py-1 rounded-full border ${status.className}`}>{status.label}</span>
                 <div className="flex items-center gap-2">
                   {!bill.paid && (
-                    <button onClick={() => onTogglePaid(bill.id)} className="h-9 w-9 rounded-xl flex items-center justify-center bg-muted text-muted-foreground" aria-label="Mark paid"><Check className="w-4 h-4" /></button>
+                    <button onClick={() => setPayingBill(bill)} className="h-9 w-9 rounded-xl flex items-center justify-center bg-muted text-muted-foreground" aria-label="Mark paid"><Check className="w-4 h-4" /></button>
                   )}
                   <button onClick={() => onDeleteBill(bill.id)} className="h-9 w-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center" aria-label="Delete bill"><Trash2 className="w-4 h-4" /></button>
                 </div>
@@ -142,6 +222,18 @@ export function BillsPage({ activeLedger, bills, onAddBill, onTogglePaid, onDele
           );
         })}
       </div>
+
+      {payingBill && (
+        <PayBillModal
+          bill={payingBill}
+          accounts={accounts}
+          onClose={() => setPayingBill(null)}
+          onMarkPaid={payment => {
+            onMarkPaid(payingBill.id, payment);
+            setPayingBill(null);
+          }}
+        />
+      )}
     </div>
   );
 }

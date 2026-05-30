@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, CreditCard, ImagePlus, Plus, Wallet, X } from 'lucide-react';
+import { ChevronLeft, CreditCard, ImagePlus, Pencil, Plus, Wallet, X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { CategoryIcon } from './category-icons/CategoryIcon';
@@ -124,10 +124,14 @@ function EditTransactionModal({
   const [accountId, setAccountId] = useState(transaction.accountId);
   const [date, setDate] = useState(transaction.date);
   const [error, setError] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
 
   const today = getPhilippineDateString();
   const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const balanceAfterTransaction = transaction.accountBalanceAfter ?? account.balance;
+  const selectedAccount = accounts.find(nextAccount => nextAccount.id === transaction.accountId) || account;
+  const editingAccount = accounts.find(nextAccount => nextAccount.id === accountId);
+  const savedPaymentItems = transaction.paymentItems || [];
 
   const addPaymentItem = () => {
     setShowPaymentItems(true);
@@ -181,72 +185,120 @@ function EditTransactionModal({
           </button>
         </div>
 
-        <div className="space-y-4">
-          <input value={description} onChange={event => setDescription(event.target.value)} placeholder="Description" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          {!showPaymentItems && (
-            <input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="Amount" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          )}
-          <div className="rounded-2xl bg-muted p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold">Add payments together</p>
-                <p className="text-xs text-muted-foreground">Edit the same itemized inputs used for this transaction.</p>
-              </div>
-              <button onClick={addPaymentItem} className="bg-card text-primary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
-                <Plus className="w-4 h-4" />
-                Add
-              </button>
+        {!isEditing ? (
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-muted p-4">
+              <p className="text-xs text-muted-foreground">Description</p>
+              <p className="font-semibold mt-1">{transaction.description}</p>
             </div>
-            {showPaymentItems && (
-              <div className="mt-3 space-y-2">
-                {paymentItems.map((item, index) => (
-                  <div key={index} className="grid grid-cols-[1fr_96px_32px] gap-2">
-                    <input value={item.label} onChange={event => updatePaymentItem(index, 'label', event.target.value)} placeholder="Vehicle" className="min-w-0 bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-                    <input type="number" min="0" step="0.01" value={item.amount} onChange={event => updatePaymentItem(index, 'amount', event.target.value)} placeholder="0.00" className="bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-                    <button onClick={() => removePaymentItem(index)} className="bg-card rounded-xl text-rose-500 flex items-center justify-center">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between text-sm pt-1">
-                  <span className="text-muted-foreground">Computed total</span>
-                  <span className="font-semibold">{formatPeso(itemizedTotal)}</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">Amount</p>
+                <p className={`font-semibold mt-1 ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
+                  {transaction.type === 'income' ? '+' : '-'}{formatPeso(transaction.amount)}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">Date</p>
+                <p className="font-semibold mt-1">{formatDisplayDate(transaction.date)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">Account</p>
+                <p className="font-semibold mt-1 truncate">{selectedAccount.name}</p>
+              </div>
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">Category</p>
+                <p className="font-semibold mt-1 truncate">{category?.name || 'Unknown'}</p>
+              </div>
+            </div>
+            {savedPaymentItems.length > 0 && (
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground mb-3">Payment items</p>
+                <div className="space-y-2">
+                  {savedPaymentItems.map((item, index) => (
+                    <div key={`${item.label}-${index}`} className="flex items-center justify-between gap-3 text-sm">
+                      <span className="min-w-0 truncate">{item.label || `Item ${index + 1}`}</span>
+                      <span className="font-semibold">{formatPeso(item.amount)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
+            <button onClick={() => setIsEditing(true)} className="w-full rounded-xl p-3 bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2">
+              <Pencil className="w-4 h-4" />
+              Edit
+            </button>
           </div>
-          <input type="date" max={today} value={date} onChange={event => setDate(event.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
-
-          <div>
-            <p className="text-sm text-muted-foreground mb-2">Account</p>
-            <div className="grid grid-cols-2 gap-2">
-              {accounts.map(nextAccount => (
-                <button
-                  key={nextAccount.id}
-                  onClick={() => setAccountId(nextAccount.id)}
-                  className={`rounded-xl p-3 text-left border ${
-                    accountId === nextAccount.id
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-muted text-foreground'
-                  }`}
-                >
-                  <p className="text-sm font-semibold truncate">{nextAccount.name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{nextAccount.kind}</p>
+        ) : (
+          <div className="space-y-4">
+            <input value={description} onChange={event => setDescription(event.target.value)} placeholder="Description" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            {!showPaymentItems && (
+              <input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="Amount" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            )}
+            <div className="rounded-2xl bg-muted p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">Add payments together</p>
+                  <p className="text-xs text-muted-foreground">Edit the same itemized inputs used for this transaction.</p>
+                </div>
+                <button onClick={addPaymentItem} className="bg-card text-primary rounded-xl px-3 py-2 text-sm flex items-center gap-1">
+                  <Plus className="w-4 h-4" />
+                  Add
                 </button>
-              ))}
+              </div>
+              {showPaymentItems && (
+                <div className="mt-3 space-y-2">
+                  {paymentItems.map((item, index) => (
+                    <div key={index} className="grid grid-cols-[1fr_96px_32px] gap-2">
+                      <input value={item.label} onChange={event => updatePaymentItem(index, 'label', event.target.value)} placeholder="Vehicle" className="min-w-0 bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                      <input type="number" min="0" step="0.01" value={item.amount} onChange={event => updatePaymentItem(index, 'amount', event.target.value)} placeholder="0.00" className="bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                      <button onClick={() => removePaymentItem(index)} className="bg-card rounded-xl text-rose-500 flex items-center justify-center">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-sm pt-1">
+                    <span className="text-muted-foreground">Computed total</span>
+                    <span className="font-semibold">{formatPeso(itemizedTotal)}</span>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+            <input type="date" max={today} value={date} onChange={event => setDate(event.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <button onClick={onDelete} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
-              Delete
-            </button>
-            <button onClick={handleSave} className="rounded-xl p-3 bg-primary text-primary-foreground font-semibold">
-              Save
-            </button>
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">Account</p>
+              <div className="grid grid-cols-2 gap-2">
+                {accounts.map(nextAccount => (
+                  <button
+                    key={nextAccount.id}
+                    onClick={() => setAccountId(nextAccount.id)}
+                    className={`rounded-xl p-3 text-left border ${
+                      accountId === nextAccount.id
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-muted text-foreground'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold truncate">{nextAccount.name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{nextAccount.kind}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button onClick={onDelete} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
+                Delete
+              </button>
+              <button onClick={handleSave} disabled={!editingAccount} className="rounded-xl p-3 bg-primary text-primary-foreground font-semibold disabled:opacity-50">
+                Save
+              </button>
+            </div>
+            {error && <p className="text-sm text-rose-600">{error}</p>}
           </div>
-          {error && <p className="text-sm text-rose-600">{error}</p>}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -406,16 +458,11 @@ function AccountDetailView({
       </div>
 
       {showQr && account.qrImage && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6" onClick={() => setShowQr(false)}>
-          <div className="bg-card rounded-3xl p-5 w-full max-w-sm" onClick={event => event.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <p className="font-semibold">{account.name} QR Code</p>
-              <button onClick={() => setShowQr(false)} className="p-2 rounded-full bg-muted">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <img src={account.qrImage} alt={`${account.name} QR code`} className="w-full aspect-square object-contain rounded-2xl bg-white p-3" />
-          </div>
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center p-4" onClick={() => setShowQr(false)}>
+          <button onClick={() => setShowQr(false)} className="absolute right-4 top-4 z-10 p-3 rounded-full bg-white/10 text-white backdrop-blur" aria-label="Close QR code">
+            <X className="w-5 h-5" />
+          </button>
+          <img src={account.qrImage} alt={`${account.name} QR code`} className="max-h-full max-w-full object-contain bg-white p-4" onClick={event => event.stopPropagation()} />
         </div>
       )}
 
@@ -513,7 +560,7 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
             <button
               key={account.id}
               onClick={() => setSelectedAccount(account)}
-              className="w-full rounded-[24px] p-6 text-left text-white shadow-lg active:scale-[0.98] transition-all bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbcfe8]"
+              className="w-full rounded-[24px] p-6 text-left text-white shadow-lg active:scale-[0.98] transition-all bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbcfe8] dark:from-[#020617] dark:via-[#1e3a8a] dark:to-[#0f172a]"
             >
               <div className="flex items-center justify-between mb-8">
                 <p className="text-sm font-semibold truncate">{account.name}</p>

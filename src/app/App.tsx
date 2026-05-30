@@ -277,8 +277,24 @@ export default function App() {
     setBills(prev => [{ ...bill, ledgerId: activeLedgerId, id: `b${Date.now()}`, paid: false }, ...prev]);
   };
 
-  const toggleBillPaid = (id: string) =>
-    setBills(prev => prev.map(bill => bill.id === id ? { ...bill, paid: !bill.paid } : bill));
+  const markBillPaid = (id: string, payment: { paidBy: 'account' | 'other'; accountId?: string }) => {
+    const bill = bills.find(nextBill => nextBill.id === id);
+    if (!bill || bill.ledgerId !== activeLedgerId || bill.paid) return;
+
+    setBills(prev => prev.map(nextBill => (
+      nextBill.id === id
+        ? { ...nextBill, paid: true, paidBy: payment.paidBy, paidAccountId: payment.paidBy === 'account' ? payment.accountId : undefined }
+        : nextBill
+    )));
+
+    if (payment.paidBy === 'account' && payment.accountId) {
+      setAccounts(prev => prev.map(account => (
+        account.id === payment.accountId && account.ledgerId === bill.ledgerId
+          ? { ...account, balance: account.balance - bill.amount }
+          : account
+      )));
+    }
+  };
 
   const deleteBill = (id: string) =>
     setBills(prev => prev.filter(bill => bill.id !== id));
@@ -421,8 +437,9 @@ export default function App() {
         <BillsPage
           activeLedger={activeLedger}
           bills={ledgerData.bills}
+          accounts={ledgerData.accounts}
           onAddBill={addBill}
-          onTogglePaid={toggleBillPaid}
+          onMarkPaid={markBillPaid}
           onDeleteBill={deleteBill}
         />
       )}

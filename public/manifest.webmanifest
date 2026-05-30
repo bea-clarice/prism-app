@@ -1,0 +1,18 @@
+{
+  "name": "PRISM",
+  "short_name": "PRISM",
+  "description": "Track your finances with PRISM.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdf2f8",
+  "theme_color": "#be185d",
+  "icons": [
+    {
+      "src": "/prism-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

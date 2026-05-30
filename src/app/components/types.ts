@@ -64,4 +64,6 @@ export interface Bill {
   dueDate: string;
   recurring: 'monthly' | 'quarterly' | 'biannually' | 'annually' | 'manual';
   paid: boolean;
+  paidBy?: 'account' | 'other';
+  paidAccountId?: string;
 }
