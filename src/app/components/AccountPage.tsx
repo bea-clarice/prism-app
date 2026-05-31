@@ -348,18 +348,18 @@ function AccountDetailView({
       <button
         key={transaction.id}
         onClick={() => setEditingTransaction(transaction)}
-        className={`w-full flex items-center justify-between p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
+        className={`w-full flex items-center justify-between gap-3 p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
             {category ? <CategoryIcon icon={category.icon} className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
           </div>
           <div className="min-w-0">
             <p className="font-medium text-sm truncate">{transaction.description || category?.name || 'Transaction'}</p>
-            <p className="text-xs text-muted-foreground">{category?.name || 'Unknown'} - {formatDisplayDate(transaction.date)}</p>
+            <p className="text-xs text-muted-foreground truncate">{category?.name || 'Unknown'} - {formatDisplayDate(transaction.date)}</p>
           </div>
         </div>
-        <p className={`font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
+        <p className={`flex-shrink-0 text-right font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
           {transaction.type === 'income' ? '+' : '-'}{formatPeso(transaction.amount)}
         </p>
       </button>
@@ -500,20 +500,20 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
       <button
         key={transaction.id}
         onClick={() => setEditingTransaction(transaction)}
-        className={`w-full flex items-center justify-between p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
+        className={`w-full flex items-center justify-between gap-3 p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
             {category ? <CategoryIcon icon={category.icon} className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
           </div>
           <div className="min-w-0">
             <p className="font-medium text-sm truncate">{transaction.description || category?.name || 'Transaction'}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground truncate">
               {account?.name || 'Unknown account'} - {formatDisplayDate(transaction.date)}
             </p>
           </div>
         </div>
-        <p className={`font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
+        <p className={`flex-shrink-0 text-right font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
           {transaction.type === 'income' ? '+' : '-'}{formatPeso(transaction.amount)}
         </p>
       </button>
@@ -546,11 +546,6 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
         </button>
       </div>
 
-      <button onClick={() => setAddingAccount(true)} disabled={!activeLedger} className="w-full bg-card border border-border rounded-2xl p-4 mb-4 text-primary font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
-        <Plus className="w-4 h-4" />
-        Add an Account
-      </button>
-
       <div className="space-y-4">
         {!activeLedger && <EmptyState title="No ledger selected" body="Add a ledger in Settings before adding accounts." />}
         {activeLedger && accounts.length === 0 && <EmptyState title="No accounts yet" body="Add an account to display balances and transactions." />}
@@ -560,9 +555,9 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
             <button
               key={account.id}
               onClick={() => setSelectedAccount(account)}
-              className="w-full rounded-[24px] p-6 text-left text-white shadow-lg active:scale-[0.98] transition-all bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbcfe8] dark:from-[#020617] dark:via-[#1e3a8a] dark:to-[#0f172a]"
+              className="w-full rounded-[22px] p-4 text-left text-white shadow-lg active:scale-[0.98] transition-all bg-gradient-to-br from-[#ec4899] via-[#f472b6] to-[#fbcfe8] dark:from-[#020617] dark:via-[#1e3a8a] dark:to-[#0f172a]"
             >
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center justify-between mb-5">
                 <p className="text-sm font-semibold truncate">{account.name}</p>
                 {account.qrImage ? (
                   <img src={account.qrImage} alt={`${account.name} QR code`} className="w-8 h-8 rounded-lg object-cover border border-white/50" />
@@ -571,8 +566,8 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
                 )}
               </div>
               <p className="text-sm font-semibold text-white/90 mb-1">Balance</p>
-              <p className="text-3xl font-bold">{formatPeso(account.balance)}</p>
-              <p className="text-sm font-semibold text-white/90 mt-5">
+              <p className="text-2xl font-bold">{formatPeso(account.balance)}</p>
+              <p className="text-sm font-semibold text-white/90 mt-3">
                 {account.kind === 'cash' ? 'Cash' : account.number || 'No account number'}
               </p>
             </button>

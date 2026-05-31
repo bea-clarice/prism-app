@@ -19,7 +19,7 @@ const recurringOptions: { value: Bill['recurring']; label: string }[] = [
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'biannually', label: 'Biannually' },
   { value: 'annually', label: 'Annually' },
-  { value: 'manual', label: 'Manual (once only)' },
+  { value: 'manual', label: 'Manual' },
 ];
 
 function EmptyState({ title, body }: { title: string; body: string }) {
@@ -137,7 +137,7 @@ export function BillsPage({ activeLedger, bills, accounts, onAddBill, onMarkPaid
     setAdding(false);
   };
 
-  const recurringLabel = recurringOptions.find(option => option.value === form.recurring)?.label || 'Manual (once only)';
+  const recurringLabel = recurringOptions.find(option => option.value === form.recurring)?.label || 'Manual';
 
   return (
     <div className="p-6 max-w-md mx-auto pb-10">
@@ -166,12 +166,14 @@ export function BillsPage({ activeLedger, bills, accounts, onAddBill, onMarkPaid
             <h3 className="font-semibold">Add Bill</h3>
             <button onClick={() => setAdding(false)} className="p-2 rounded-full bg-muted"><X className="w-4 h-4" /></button>
           </div>
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Bill name" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          <input type="number" min="0" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="Amount" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          <div className="space-y-3">
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Bill name" className="block w-full min-w-0 box-border bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            <input type="number" min="0" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="Amount" className="block w-full min-w-0 box-border bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="block w-full min-w-0 box-border bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          </div>
 
           <div className="relative">
-            <button onClick={() => setRecurringOpen(open => !open)} className="w-full flex items-center justify-between rounded-xl bg-muted p-3 text-sm">
+            <button onClick={() => setRecurringOpen(open => !open)} className="w-full min-w-0 box-border flex items-center justify-between rounded-xl bg-muted p-3 text-sm">
               <span>{recurringLabel}</span>
               <ChevronDown className="w-4 h-4" />
             </button>

@@ -178,12 +178,17 @@ function AccountManager({ accounts, canAdd, onAdd, onDelete }: { accounts: Accou
 function CategoryManager({ categories, canAdd, onAdd, onDelete }: { categories: Category[]; canAdd: boolean; onAdd: (category: Omit<Category, 'id' | 'ledgerId'>) => void; onDelete: (id: string) => void }) {
   const [adding, setAdding] = useState(false);
   const [activeTab, setActiveTab] = useState<'income' | 'expense'>('expense');
-  const [form, setForm] = useState({ name: '', type: 'expense' as Category['type'], icon: 'wallet' as CategoryIconKey, color: '#ec4899' });
+  const [form, setForm] = useState({ name: '', icon: 'wallet' as CategoryIconKey });
 
   const handleAdd = () => {
     if (!form.name.trim()) return;
-    onAdd({ ...form, name: form.name.trim(), color: form.type === 'income' ? '#16a34a' : '#e11d48' });
-    setForm({ name: '', type: 'expense', icon: 'wallet', color: '#ec4899' });
+    onAdd({
+      name: form.name.trim(),
+      type: activeTab,
+      icon: form.icon,
+      color: activeTab === 'income' ? '#16a34a' : '#e11d48',
+    });
+    setForm({ name: '', icon: 'wallet' });
     setAdding(false);
   };
 
@@ -202,9 +207,7 @@ function CategoryManager({ categories, canAdd, onAdd, onDelete }: { categories: 
 
       {adding && (
         <div className="bg-muted rounded-2xl p-4 mb-4 space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            {(['income', 'expense'] as const).map(type => <button key={type} onClick={() => setForm(f => ({ ...f, type }))} className={`py-2 rounded-xl text-sm font-medium capitalize ${form.type === type ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}>{type}</button>)}
-          </div>
+          <p className="text-xs text-muted-foreground">Adding to {activeTab}</p>
           <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Category name" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
           <div className="grid grid-cols-4 gap-2">
             {CATEGORY_ICON_OPTIONS.map(option => (
@@ -214,7 +217,7 @@ function CategoryManager({ categories, canAdd, onAdd, onDelete }: { categories: 
               </button>
             ))}
           </div>
-          <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">Add Category</button>
+          <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">Add {activeTab} Category</button>
         </div>
       )}
 
