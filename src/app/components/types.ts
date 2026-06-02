@@ -49,6 +49,16 @@ export interface Transaction {
   date: string;
 }
 
+export interface MoneyTransfer {
+  id: string;
+  ledgerId: string;
+  fromAccountId: string;
+  toAccountId: string;
+  amount: number;
+  note?: string;
+  date: string;
+}
+
 export interface Profile {
   name: string;
   email: string;

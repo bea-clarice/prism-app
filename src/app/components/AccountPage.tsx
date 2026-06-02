@@ -1,17 +1,21 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, CreditCard, ImagePlus, Pencil, Plus, Wallet, X } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, CreditCard, ImagePlus, Pencil, Plus, Wallet, X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
 import { CategoryIcon } from './category-icons/CategoryIcon';
-import type { Account, Category, Ledger, Transaction } from './types';
+import type { Account, Category, Ledger, MoneyTransfer, Transaction } from './types';
 import { formatDisplayDate, formatPeso, getPhilippineDate, getPhilippineDateString } from '../utils/format';
 
 interface AccountPageProps {
   activeLedger: Ledger | null;
   accounts: Account[];
   transactions: Transaction[];
+  transfers: MoneyTransfer[];
   categories: Category[];
   onAddAccount: (account: Omit<Account, 'id' | 'ledgerId'>) => void;
+  onAddTransfer: (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
+  onUpdateTransfer: (id: string, transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
+  onDeleteTransfer: (id: string) => void;
   onUpdateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
   onDeleteTransaction: (id: string) => void;
 }
@@ -93,6 +97,301 @@ function AddAccountModal({ onAdd, onClose }: { onAdd: (account: Omit<Account, 'i
 
           <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl p-3 font-semibold">Add Account</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TransferMoneyModal({
+  accounts,
+  onAdd,
+  onClose,
+}: {
+  accounts: Account[];
+  onAdd: (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
+  onClose: () => void;
+}) {
+  const [fromAccountId, setFromAccountId] = useState(accounts[0]?.id || '');
+  const [toAccountId, setToAccountId] = useState(accounts.find(account => account.id !== accounts[0]?.id)?.id || '');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [date, setDate] = useState(getPhilippineDateString());
+  const [error, setError] = useState('');
+  const today = getPhilippineDateString();
+
+  const fromAccount = accounts.find(account => account.id === fromAccountId);
+  const toAccount = accounts.find(account => account.id === toAccountId);
+
+  const handleSubmit = () => {
+    const parsedAmount = parseFloat(amount);
+    if (date > today) {
+      setError('Transfers cannot be added for future dates.');
+      return;
+    }
+    if (!fromAccount || !toAccount || fromAccount.id === toAccount.id) {
+      setError('Choose two different accounts.');
+      return;
+    }
+    if (!parsedAmount || parsedAmount <= 0) {
+      setError('Enter a valid transfer amount.');
+      return;
+    }
+    if (fromAccount.balance < parsedAmount) {
+      setError(`${fromAccount.name} does not have enough balance.`);
+      return;
+    }
+
+    onAdd({
+      fromAccountId: fromAccount.id,
+      toAccountId: toAccount.id,
+      amount: parsedAmount,
+      note: note.trim() || undefined,
+      date,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={onClose}>
+      <div className="bg-card rounded-t-3xl p-6 w-full max-w-md mx-auto pb-10" onClick={event => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
+              <ArrowLeftRight className="w-5 h-5" />
+            </span>
+            <div>
+              <h3 className="font-semibold">Transfer Money</h3>
+              <p className="text-sm text-muted-foreground">Move funds between your accounts.</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full bg-muted"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="space-y-4">
+          <input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="Amount" autoFocus className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          <input value={note} onChange={event => setNote(event.target.value)} placeholder="Note optional" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+          <input type="date" max={today} value={date} onChange={event => setDate(event.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">From</p>
+            <div className="grid grid-cols-2 gap-2">
+              {accounts.map(account => (
+                <button
+                  key={account.id}
+                  onClick={() => {
+                    setFromAccountId(account.id);
+                    if (toAccountId === account.id) {
+                      setToAccountId(accounts.find(nextAccount => nextAccount.id !== account.id)?.id || '');
+                    }
+                  }}
+                  className={`rounded-xl p-3 text-left border ${
+                    fromAccountId === account.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-foreground'
+                  }`}
+                >
+                  <p className="text-sm font-semibold truncate">{account.name}</p>
+                  <p className="text-xs text-muted-foreground">{formatPeso(account.balance)}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">To</p>
+            <div className="grid grid-cols-2 gap-2">
+              {accounts.map(account => (
+                <button
+                  key={account.id}
+                  onClick={() => setToAccountId(account.id)}
+                  disabled={account.id === fromAccountId}
+                  className={`rounded-xl p-3 text-left border disabled:opacity-40 ${
+                    toAccountId === account.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-foreground'
+                  }`}
+                >
+                  <p className="text-sm font-semibold truncate">{account.name}</p>
+                  <p className="text-xs text-muted-foreground">{formatPeso(account.balance)}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-rose-600">{error}</p>}
+          <button onClick={handleSubmit} className="w-full bg-primary text-primary-foreground rounded-xl p-3 font-semibold">
+            Transfer Money
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransferDetailsModal({
+  transfer,
+  accounts,
+  onSave,
+  onDelete,
+  onClose,
+}: {
+  transfer: MoneyTransfer;
+  accounts: Account[];
+  onSave: (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  const [fromAccountId, setFromAccountId] = useState(transfer.fromAccountId);
+  const [toAccountId, setToAccountId] = useState(transfer.toAccountId);
+  const [amount, setAmount] = useState(String(transfer.amount));
+  const [note, setNote] = useState(transfer.note || '');
+  const [date, setDate] = useState(transfer.date);
+  const [error, setError] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+
+  const today = getPhilippineDateString();
+  const fromAccount = accounts.find(account => account.id === transfer.fromAccountId);
+  const toAccount = accounts.find(account => account.id === transfer.toAccountId);
+  const editingFromAccount = accounts.find(account => account.id === fromAccountId);
+  const editingToAccount = accounts.find(account => account.id === toAccountId);
+
+  const getAvailableBalance = (account: Account) => {
+    let balance = account.balance;
+    if (account.id === transfer.fromAccountId) balance += transfer.amount;
+    if (account.id === transfer.toAccountId) balance -= transfer.amount;
+    return balance;
+  };
+
+  const handleSave = () => {
+    const parsedAmount = parseFloat(amount);
+    if (date > today) {
+      setError('Transfers cannot be saved for future dates.');
+      return;
+    }
+    if (!editingFromAccount || !editingToAccount || editingFromAccount.id === editingToAccount.id) {
+      setError('Choose two different accounts.');
+      return;
+    }
+    if (!parsedAmount || parsedAmount <= 0) {
+      setError('Enter a valid transfer amount.');
+      return;
+    }
+    if (getAvailableBalance(editingFromAccount) < parsedAmount) {
+      setError(`${editingFromAccount.name} does not have enough balance.`);
+      return;
+    }
+
+    onSave({
+      fromAccountId: editingFromAccount.id,
+      toAccountId: editingToAccount.id,
+      amount: parsedAmount,
+      note: note.trim() || undefined,
+      date,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={onClose}>
+      <div className="bg-card rounded-t-3xl p-6 w-full max-w-md mx-auto pb-10" onClick={event => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h3 className="font-semibold">Transfer Details</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {fromAccount?.name || 'Unknown account'} to {toAccount?.name || 'Unknown account'}
+            </p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full bg-muted">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {!isEditing ? (
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-muted p-4">
+              <p className="text-xs text-muted-foreground">Note</p>
+              <p className="font-semibold mt-1">{transfer.note || 'Money transfer'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">Amount</p>
+                <p className="font-semibold text-primary mt-1">{formatPeso(transfer.amount)}</p>
+              </div>
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">Date</p>
+                <p className="font-semibold mt-1">{formatDisplayDate(transfer.date)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">From</p>
+                <p className="font-semibold mt-1 truncate">{fromAccount?.name || 'Unknown'}</p>
+              </div>
+              <div className="rounded-2xl bg-muted p-4">
+                <p className="text-xs text-muted-foreground">To</p>
+                <p className="font-semibold mt-1 truncate">{toAccount?.name || 'Unknown'}</p>
+              </div>
+            </div>
+            <button onClick={() => setIsEditing(true)} className="w-full rounded-xl p-3 bg-primary text-primary-foreground font-semibold flex items-center justify-center gap-2">
+              <Pencil className="w-4 h-4" />
+              Edit
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <input type="number" min="0" step="0.01" value={amount} onChange={event => setAmount(event.target.value)} placeholder="Amount" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            <input value={note} onChange={event => setNote(event.target.value)} placeholder="Note optional" className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            <input type="date" max={today} value={date} onChange={event => setDate(event.target.value)} className="w-full bg-muted rounded-xl p-3 outline-none focus:ring-2 focus:ring-primary text-foreground" />
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">From</p>
+              <div className="grid grid-cols-2 gap-2">
+                {accounts.map(account => (
+                  <button
+                    key={account.id}
+                    onClick={() => {
+                      setFromAccountId(account.id);
+                      if (toAccountId === account.id) {
+                        setToAccountId(accounts.find(nextAccount => nextAccount.id !== account.id)?.id || '');
+                      }
+                    }}
+                    className={`rounded-xl p-3 text-left border ${
+                      fromAccountId === account.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-foreground'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold truncate">{account.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatPeso(getAvailableBalance(account))}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">To</p>
+              <div className="grid grid-cols-2 gap-2">
+                {accounts.map(account => (
+                  <button
+                    key={account.id}
+                    onClick={() => setToAccountId(account.id)}
+                    disabled={account.id === fromAccountId}
+                    className={`rounded-xl p-3 text-left border disabled:opacity-40 ${
+                      toAccountId === account.id ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-foreground'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold truncate">{account.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatPeso(getAvailableBalance(account))}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button onClick={onDelete} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
+                Delete
+              </button>
+              <button onClick={handleSave} className="rounded-xl p-3 bg-primary text-primary-foreground font-semibold">
+                Save
+              </button>
+            </div>
+            {error && <p className="text-sm text-rose-600">{error}</p>}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -308,39 +607,54 @@ function AccountDetailView({
   account,
   accounts,
   transactions,
+  transfers,
   categories,
   onBack,
+  onUpdateTransfer,
+  onDeleteTransfer,
   onUpdateTransaction,
   onDeleteTransaction,
 }: {
   account: Account;
   accounts: Account[];
   transactions: Transaction[];
+  transfers: MoneyTransfer[];
   categories: Category[];
   onBack: () => void;
+  onUpdateTransfer: (id: string, transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
+  onDeleteTransfer: (id: string) => void;
   onUpdateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
   onDeleteTransaction: (id: string) => void;
 }) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(getPhilippineDate());
   const [showQr, setShowQr] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<MoneyTransfer | null>(null);
 
   const selectedDateStr = selectedDate
     ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
     : getPhilippineDateString();
 
   const accountTransactions = useMemo(() => transactions.filter(t => t.accountId === account.id), [transactions, account.id]);
+  const accountTransfers = useMemo(
+    () => transfers.filter(transfer => transfer.fromAccountId === account.id || transfer.toAccountId === account.id),
+    [transfers, account.id]
+  );
   const dayTransactions = accountTransactions.filter(t => t.date === selectedDateStr);
+  const dayTransfers = accountTransfers.filter(transfer => transfer.date === selectedDateStr);
   const getCategoryById = (id: string) => categories.find(c => c.id === id);
+  const getAccountById = (id: string) => accounts.find(nextAccount => nextAccount.id === id);
   const transactionDates = useMemo(
-    () => Array.from(new Set(accountTransactions.map(transaction => transaction.date))).map(date => new Date(`${date}T00:00:00`)),
-    [accountTransactions]
+    () => Array.from(new Set([...accountTransactions.map(transaction => transaction.date), ...accountTransfers.map(transfer => transfer.date)])).map(date => new Date(`${date}T00:00:00`)),
+    [accountTransactions, accountTransfers]
   );
 
   const totalIncome = accountTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const totalExpense = accountTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
   const dayIncome = dayTransactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const dayExpense = dayTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const transferIn = accountTransfers.filter(transfer => transfer.toAccountId === account.id).reduce((sum, transfer) => sum + transfer.amount, 0);
+  const transferOut = accountTransfers.filter(transfer => transfer.fromAccountId === account.id).reduce((sum, transfer) => sum + transfer.amount, 0);
 
   const renderTransaction = (transaction: Transaction, bordered: boolean) => {
     const category = getCategoryById(transaction.categoryId);
@@ -361,6 +675,34 @@ function AccountDetailView({
         </div>
         <p className={`flex-shrink-0 text-right font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
           {transaction.type === 'income' ? '+' : '-'}{formatPeso(transaction.amount)}
+        </p>
+      </button>
+    );
+  };
+
+  const renderTransfer = (transfer: MoneyTransfer, bordered: boolean) => {
+    const isIncoming = transfer.toAccountId === account.id;
+    const otherAccount = getAccountById(isIncoming ? transfer.fromAccountId : transfer.toAccountId);
+
+    return (
+      <button
+        key={transfer.id}
+        onClick={() => setEditingTransfer(transfer)}
+        className={`w-full flex items-center justify-between gap-3 p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <ArrowLeftRight className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{transfer.note || (isIncoming ? 'Transfer in' : 'Transfer out')}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {isIncoming ? 'From' : 'To'} {otherAccount?.name || 'Unknown account'} - {formatDisplayDate(transfer.date)}
+            </p>
+          </div>
+        </div>
+        <p className={`flex-shrink-0 text-right font-semibold text-sm ${isIncoming ? 'text-green-600' : 'text-rose-500'}`}>
+          {isIncoming ? '+' : '-'}{formatPeso(transfer.amount)}
         </p>
       </button>
     );
@@ -444,17 +786,34 @@ function AccountDetailView({
           <div className="bg-rose-50 rounded-2xl p-3 border border-rose-100"><p className="text-xs text-rose-600 mb-1">Total Expense</p><p className="font-semibold text-rose-700">{formatPeso(totalExpense)}</p></div>
           <div className="bg-card rounded-2xl p-3 border border-border"><p className="text-xs text-muted-foreground mb-1">Day Income</p><p className="font-semibold text-green-700">{formatPeso(dayIncome)}</p></div>
           <div className="bg-card rounded-2xl p-3 border border-border"><p className="text-xs text-muted-foreground mb-1">Day Expense</p><p className="font-semibold text-rose-700">{formatPeso(dayExpense)}</p></div>
+          <div className="bg-card rounded-2xl p-3 border border-border"><p className="text-xs text-muted-foreground mb-1">Transfer In</p><p className="font-semibold text-green-700">{formatPeso(transferIn)}</p></div>
+          <div className="bg-card rounded-2xl p-3 border border-border"><p className="text-xs text-muted-foreground mb-1">Transfer Out</p><p className="font-semibold text-rose-700">{formatPeso(transferOut)}</p></div>
         </div>
       </div>
 
       <div className="px-6 mb-5">
         <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Selected Date</h3>
-        {dayTransactions.length === 0 ? <EmptyState title="No transactions on this day" body="Add a transaction to display daily activity." /> : <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">{dayTransactions.map((t, i) => renderTransaction(t, i < dayTransactions.length - 1))}</div>}
+        {dayTransactions.length === 0 && dayTransfers.length === 0 ? (
+          <EmptyState title="No activity on this day" body="Add a transaction or transfer to display daily activity." />
+        ) : (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {[...dayTransfers, ...dayTransactions].map((item, index, items) => (
+              'fromAccountId' in item
+                ? renderTransfer(item, index < items.length - 1)
+                : renderTransaction(item, index < items.length - 1)
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="px-6">
         <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Transaction History</h3>
         {accountTransactions.length === 0 ? <EmptyState title="No transaction history yet" body="Add transactions from dashboard categories to display data." /> : <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">{accountTransactions.map((t, i) => renderTransaction(t, i < accountTransactions.length - 1))}</div>}
+      </div>
+
+      <div className="px-6 mt-5">
+        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Transfer History</h3>
+        {accountTransfers.length === 0 ? <EmptyState title="No transfers yet" body="Move money between accounts to display transfer history." /> : <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">{accountTransfers.map((transfer, index) => renderTransfer(transfer, index < accountTransfers.length - 1))}</div>}
       </div>
 
       {showQr && account.qrImage && (
@@ -480,17 +839,33 @@ function AccountDetailView({
           onClose={() => setEditingTransaction(null)}
         />
       )}
+
+      {editingTransfer && (
+        <TransferDetailsModal
+          transfer={editingTransfer}
+          accounts={accounts}
+          onSave={transfer => onUpdateTransfer(editingTransfer.id, transfer)}
+          onDelete={() => {
+            onDeleteTransfer(editingTransfer.id);
+            setEditingTransfer(null);
+          }}
+          onClose={() => setEditingTransfer(null)}
+        />
+      )}
     </div>
   );
 }
 
-export function AccountPage({ activeLedger, accounts, transactions, categories, onAddAccount, onUpdateTransaction, onDeleteTransaction }: AccountPageProps) {
+export function AccountPage({ activeLedger, accounts, transactions, transfers, categories, onAddAccount, onAddTransfer, onUpdateTransfer, onDeleteTransfer, onUpdateTransaction, onDeleteTransaction }: AccountPageProps) {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [addingAccount, setAddingAccount] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [editingTransfer, setEditingTransfer] = useState<MoneyTransfer | null>(null);
 
   const getCategoryById = (id: string) => categories.find(category => category.id === id);
   const getAccountById = (id: string) => accounts.find(account => account.id === id);
+  const canTransfer = Boolean(activeLedger && accounts.length >= 2);
 
   const renderAllTransaction = (transaction: Transaction, bordered: boolean) => {
     const category = getCategoryById(transaction.categoryId);
@@ -520,6 +895,32 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
     );
   };
 
+  const renderTransfer = (transfer: MoneyTransfer, bordered: boolean) => {
+    const fromAccount = getAccountById(transfer.fromAccountId);
+    const toAccount = getAccountById(transfer.toAccountId);
+
+    return (
+      <button
+        key={transfer.id}
+        onClick={() => setEditingTransfer(transfer)}
+        className={`w-full flex items-center justify-between gap-3 p-4 text-left ${bordered ? 'border-b border-border' : ''}`}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+            <ArrowLeftRight className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{transfer.note || 'Money transfer'}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {fromAccount?.name || 'Unknown'} to {toAccount?.name || 'Unknown'} - {formatDisplayDate(transfer.date)}
+            </p>
+          </div>
+        </div>
+        <p className="flex-shrink-0 text-right font-semibold text-sm text-primary">{formatPeso(transfer.amount)}</p>
+      </button>
+    );
+  };
+
   if (selectedAccount) {
     const current = accounts.find(account => account.id === selectedAccount.id) || selectedAccount;
     return (
@@ -527,8 +928,11 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
         account={current}
         accounts={accounts}
         transactions={transactions}
+        transfers={transfers}
         categories={categories}
         onBack={() => setSelectedAccount(null)}
+        onUpdateTransfer={onUpdateTransfer}
+        onDeleteTransfer={onDeleteTransfer}
         onUpdateTransaction={onUpdateTransaction}
         onDeleteTransaction={onDeleteTransaction}
       />
@@ -541,9 +945,14 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
         <div>
           <h2 className="text-3xl font-bold">My Accounts</h2>
         </div>
-        <button onClick={() => setAddingAccount(true)} disabled={!activeLedger} className="h-11 w-11 rounded-2xl bg-primary text-white flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40" aria-label="Add an account">
-          <Plus className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setTransferring(true)} disabled={!canTransfer} className="h-11 w-11 rounded-2xl bg-card border border-border text-primary flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40" aria-label="Transfer money">
+            <ArrowLeftRight className="w-5 h-5" />
+          </button>
+          <button onClick={() => setAddingAccount(true)} disabled={!activeLedger} className="h-11 w-11 rounded-2xl bg-primary text-white flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-40" aria-label="Add an account">
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -586,7 +995,32 @@ export function AccountPage({ activeLedger, accounts, transactions, categories, 
         )}
       </div>
 
+      <div className="mt-8">
+        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Transfer History</h3>
+        {transfers.length === 0 ? (
+          <EmptyState title="No transfers yet" body="Use two accounts to move money and display transfer history." />
+        ) : (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {transfers.map((transfer, index) => renderTransfer(transfer, index < transfers.length - 1))}
+          </div>
+        )}
+      </div>
+
       {addingAccount && <AddAccountModal onAdd={onAddAccount} onClose={() => setAddingAccount(false)} />}
+      {transferring && <TransferMoneyModal accounts={accounts} onAdd={onAddTransfer} onClose={() => setTransferring(false)} />}
+
+      {editingTransfer && (
+        <TransferDetailsModal
+          transfer={editingTransfer}
+          accounts={accounts}
+          onSave={transfer => onUpdateTransfer(editingTransfer.id, transfer)}
+          onDelete={() => {
+            onDeleteTransfer(editingTransfer.id);
+            setEditingTransfer(null);
+          }}
+          onClose={() => setEditingTransfer(null)}
+        />
+      )}
 
       {editingTransaction && getAccountById(editingTransaction.accountId) && (
         <EditTransactionModal

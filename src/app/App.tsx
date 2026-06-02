@@ -6,7 +6,7 @@ import { BillsPage } from './components/BillsPage';
 import { DashboardPage } from './components/DashboardPage';
 import { PrismLogo } from './components/PrismLogo';
 import { SettingsPage } from './components/SettingsPage';
-import type { Account, Bill, Category, Ledger, Profile, Transaction } from './components/types';
+import type { Account, Bill, Category, Ledger, MoneyTransfer, Profile, Transaction } from './components/types';
 
 const STORAGE_KEY = 'prism-app-state-v1';
 
@@ -19,6 +19,7 @@ interface PersistedState {
   accounts: Account[];
   categories: Category[];
   transactions: Transaction[];
+  transfers?: MoneyTransfer[];
   bills: Bill[];
   notificationsEnabled: boolean;
   darkMode: boolean;
@@ -38,6 +39,7 @@ export default function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transfers, setTransfers] = useState<MoneyTransfer[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
@@ -60,6 +62,7 @@ export default function App() {
           setAccounts(saved.accounts || []);
           setCategories(saved.categories || []);
           setTransactions(saved.transactions || []);
+          setTransfers(saved.transfers || []);
           setBills(saved.bills || []);
           setNotificationsEnabled(saved.notificationsEnabled ?? true);
           setDarkMode(saved.darkMode ?? false);
@@ -104,6 +107,7 @@ export default function App() {
       accounts,
       categories,
       transactions,
+      transfers,
       bills,
       notificationsEnabled,
       darkMode,
@@ -122,22 +126,24 @@ export default function App() {
     notificationsEnabled,
     profile,
     transactions,
+    transfers,
   ]);
 
   const activeLedger = ledgers.find(ledger => ledger.id === activeLedgerId) || null;
 
   const ledgerData = useMemo(() => {
     if (!activeLedgerId) {
-      return { accounts: [], categories: [], transactions: [], bills: [] };
+      return { accounts: [], categories: [], transactions: [], transfers: [], bills: [] };
     }
 
     return {
       accounts: accounts.filter(account => account.ledgerId === activeLedgerId),
       categories: categories.filter(category => category.ledgerId === activeLedgerId),
       transactions: transactions.filter(transaction => transaction.ledgerId === activeLedgerId),
+      transfers: transfers.filter(transfer => transfer.ledgerId === activeLedgerId),
       bills: bills.filter(bill => bill.ledgerId === activeLedgerId),
     };
-  }, [accounts, activeLedgerId, bills, categories, transactions]);
+  }, [accounts, activeLedgerId, bills, categories, transactions, transfers]);
 
   const billNotifications = useMemo(() => {
     if (!notificationsEnabled) return [];
@@ -190,6 +196,7 @@ export default function App() {
     setAccounts(prev => prev.filter(account => account.ledgerId !== id));
     setCategories(prev => prev.filter(category => category.ledgerId !== id));
     setTransactions(prev => prev.filter(transaction => transaction.ledgerId !== id));
+    setTransfers(prev => prev.filter(transfer => transfer.ledgerId !== id));
     setBills(prev => prev.filter(bill => bill.ledgerId !== id));
   };
 
@@ -257,9 +264,84 @@ export default function App() {
     setAccounts(prev => [...prev, { ...account, ledgerId: activeLedgerId, id: `a${Date.now()}` }]);
   };
 
+  const addTransfer = (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => {
+    if (!activeLedgerId) return;
+    const fromAccount = accounts.find(account => account.id === transfer.fromAccountId && account.ledgerId === activeLedgerId);
+    const toAccount = accounts.find(account => account.id === transfer.toAccountId && account.ledgerId === activeLedgerId);
+    if (!fromAccount || !toAccount || fromAccount.id === toAccount.id || transfer.amount <= 0 || fromAccount.balance < transfer.amount) return;
+
+    const newTransfer: MoneyTransfer = {
+      ...transfer,
+      note: transfer.note?.trim() || undefined,
+      ledgerId: activeLedgerId,
+      id: `m${Date.now()}`,
+    };
+
+    setTransfers(prev => [newTransfer, ...prev]);
+    setAccounts(prev => prev.map(account => {
+      if (account.ledgerId !== activeLedgerId) return account;
+      if (account.id === transfer.fromAccountId) return { ...account, balance: account.balance - transfer.amount };
+      if (account.id === transfer.toAccountId) return { ...account, balance: account.balance + transfer.amount };
+      return account;
+    }));
+  };
+
+  const updateTransfer = (id: string, nextTransfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => {
+    const currentTransfer = transfers.find(transfer => transfer.id === id);
+    if (!currentTransfer || currentTransfer.ledgerId !== activeLedgerId) return;
+
+    const fromAccount = accounts.find(account => account.id === nextTransfer.fromAccountId && account.ledgerId === currentTransfer.ledgerId);
+    const toAccount = accounts.find(account => account.id === nextTransfer.toAccountId && account.ledgerId === currentTransfer.ledgerId);
+    if (!fromAccount || !toAccount || fromAccount.id === toAccount.id || nextTransfer.amount <= 0) return;
+
+    let availableBalance = fromAccount.balance;
+    if (fromAccount.id === currentTransfer.fromAccountId) availableBalance += currentTransfer.amount;
+    if (fromAccount.id === currentTransfer.toAccountId) availableBalance -= currentTransfer.amount;
+    if (availableBalance < nextTransfer.amount) return;
+
+    const updatedTransfer: MoneyTransfer = {
+      ...nextTransfer,
+      note: nextTransfer.note?.trim() || undefined,
+      id,
+      ledgerId: currentTransfer.ledgerId,
+    };
+
+    setTransfers(prev => prev.map(transfer => (
+      transfer.id === id
+        ? updatedTransfer
+        : transfer
+    )));
+
+    setAccounts(prev => prev.map(account => {
+      if (account.ledgerId !== currentTransfer.ledgerId) return account;
+
+      let balance = account.balance;
+      if (account.id === currentTransfer.fromAccountId) balance += currentTransfer.amount;
+      if (account.id === currentTransfer.toAccountId) balance -= currentTransfer.amount;
+      if (account.id === nextTransfer.fromAccountId) balance -= nextTransfer.amount;
+      if (account.id === nextTransfer.toAccountId) balance += nextTransfer.amount;
+
+      return { ...account, balance };
+    }));
+  };
+
+  const deleteTransfer = (id: string) => {
+    const currentTransfer = transfers.find(transfer => transfer.id === id);
+    if (!currentTransfer || currentTransfer.ledgerId !== activeLedgerId) return;
+
+    setTransfers(prev => prev.filter(transfer => transfer.id !== id));
+    setAccounts(prev => prev.map(account => {
+      if (account.ledgerId !== currentTransfer.ledgerId) return account;
+      if (account.id === currentTransfer.fromAccountId) return { ...account, balance: account.balance + currentTransfer.amount };
+      if (account.id === currentTransfer.toAccountId) return { ...account, balance: account.balance - currentTransfer.amount };
+      return account;
+    }));
+  };
+
   const deleteAccount = (id: string) => {
     setAccounts(prev => prev.filter(account => account.id !== id));
     setTransactions(prev => prev.filter(transaction => transaction.accountId !== id));
+    setTransfers(prev => prev.filter(transfer => transfer.fromAccountId !== id && transfer.toAccountId !== id));
   };
 
   const addCategory = (category: Omit<Category, 'id' | 'ledgerId'>) => {
@@ -426,8 +508,12 @@ export default function App() {
           activeLedger={activeLedger}
           accounts={ledgerData.accounts}
           transactions={ledgerData.transactions}
+          transfers={ledgerData.transfers}
           categories={ledgerData.categories}
           onAddAccount={addAccount}
+          onAddTransfer={addTransfer}
+          onUpdateTransfer={updateTransfer}
+          onDeleteTransfer={deleteTransfer}
           onUpdateTransaction={updateTransaction}
           onDeleteTransaction={deleteTransaction}
         />
