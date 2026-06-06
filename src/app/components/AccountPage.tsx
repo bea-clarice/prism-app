@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { ArrowLeftRight, ChevronLeft, CreditCard, ImagePlus, Pencil, Plus, Wallet, X } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 import 'react-day-picker/dist/style.css';
@@ -288,7 +288,7 @@ function TransferDetailsModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-end" onClick={onClose}>
       <div className="bg-card rounded-t-3xl p-6 w-full max-w-md mx-auto pb-10" onClick={event => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
@@ -470,7 +470,7 @@ function EditTransactionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-end" onClick={onClose}>
       <div className="bg-card rounded-t-3xl p-6 w-full max-w-md mx-auto pb-10" onClick={event => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
@@ -603,6 +603,179 @@ function EditTransactionModal({
   );
 }
 
+function HistoryFilterButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl px-3 py-2 text-sm font-medium ${
+        active ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TransactionHistoryModal({
+  title,
+  transactions,
+  accounts,
+  categories,
+  onSelect,
+  onClose,
+}: {
+  title: string;
+  transactions: Transaction[];
+  accounts: Account[];
+  categories: Category[];
+  onSelect: (transaction: Transaction) => void;
+  onClose: () => void;
+}) {
+  const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
+
+  const getAccountById = (id: string) => accounts.find(account => account.id === id);
+  const getCategoryById = (id: string) => categories.find(category => category.id === id);
+
+  const filtered = transactions.filter(transaction => {
+    if (typeFilter !== 'all' && transaction.type !== typeFilter) return false;
+    return true;
+  });
+
+  return (
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
+      <div className="w-full max-w-md mx-auto p-6 pb-10">
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h3 className="text-2xl font-bold">{title}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{filtered.length} of {transactions.length} shown</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full bg-muted"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-5">
+          <HistoryFilterButton active={typeFilter === 'all'} onClick={() => setTypeFilter('all')}>All</HistoryFilterButton>
+          <HistoryFilterButton active={typeFilter === 'income'} onClick={() => setTypeFilter('income')}>Income</HistoryFilterButton>
+          <HistoryFilterButton active={typeFilter === 'expense'} onClick={() => setTypeFilter('expense')}>Expense</HistoryFilterButton>
+        </div>
+
+        {filtered.length === 0 ? (
+          <EmptyState title="No transactions found" body="Choose another history filter to show more records." />
+        ) : (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {filtered.map((transaction, index) => {
+              const account = getAccountById(transaction.accountId);
+              const category = getCategoryById(transaction.categoryId);
+              return (
+                <button
+                  key={transaction.id}
+                  onClick={() => onSelect(transaction)}
+                  className={`w-full flex items-center justify-between gap-3 p-4 text-left ${index < filtered.length - 1 ? 'border-b border-border' : ''}`}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      {category ? <CategoryIcon icon={category.icon} className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{transaction.description || category?.name || 'Transaction'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{account?.name || 'Unknown account'} - {category?.name || 'Unknown'} - {formatDisplayDate(transaction.date)}</p>
+                    </div>
+                  </div>
+                  <p className={`flex-shrink-0 text-right font-semibold text-sm ${transaction.type === 'income' ? 'text-green-600' : 'text-rose-500'}`}>
+                    {transaction.type === 'income' ? '+' : '-'}{formatPeso(transaction.amount)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TransferHistoryModal({
+  title,
+  transfers,
+  accounts,
+  focusAccountId,
+  onSelect,
+  onClose,
+}: {
+  title: string;
+  transfers: MoneyTransfer[];
+  accounts: Account[];
+  focusAccountId?: string;
+  onSelect: (transfer: MoneyTransfer) => void;
+  onClose: () => void;
+}) {
+  const [accountFilter, setAccountFilter] = useState('all');
+
+  const getAccountById = (id: string) => accounts.find(account => account.id === id);
+  const filterAccounts = accounts.filter(account => account.id !== focusAccountId);
+
+  const filtered = transfers.filter(transfer => {
+    if (accountFilter !== 'all' && transfer.fromAccountId !== accountFilter && transfer.toAccountId !== accountFilter) return false;
+    return true;
+  });
+
+  return (
+    <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
+      <div className="w-full max-w-md mx-auto p-6 pb-10">
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h3 className="text-2xl font-bold">{title}</h3>
+            <p className="text-sm text-muted-foreground mt-1">{filtered.length} of {transfers.length} shown</p>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full bg-muted"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-5">
+          <HistoryFilterButton active={accountFilter === 'all'} onClick={() => setAccountFilter('all')}>All</HistoryFilterButton>
+          {filterAccounts.map(account => (
+            <HistoryFilterButton key={account.id} active={accountFilter === account.id} onClick={() => setAccountFilter(account.id)}>
+              {account.name}
+            </HistoryFilterButton>
+          ))}
+        </div>
+
+        {filtered.length === 0 ? (
+          <EmptyState title="No transfers found" body="Choose another account filter to show more records." />
+        ) : (
+          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+            {filtered.map((transfer, index) => {
+              const fromAccount = getAccountById(transfer.fromAccountId);
+              const toAccount = getAccountById(transfer.toAccountId);
+              const isIncoming = focusAccountId ? transfer.toAccountId === focusAccountId : false;
+              const amountClass = focusAccountId ? (isIncoming ? 'text-green-600' : 'text-rose-500') : 'text-primary';
+              const amountPrefix = focusAccountId ? (isIncoming ? '+' : '-') : '';
+              return (
+                <button
+                  key={transfer.id}
+                  onClick={() => onSelect(transfer)}
+                  className={`w-full flex items-center justify-between gap-3 p-4 text-left ${index < filtered.length - 1 ? 'border-b border-border' : ''}`}
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <ArrowLeftRight className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm truncate">{transfer.note || 'Money transfer'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{fromAccount?.name || 'Unknown'} to {toAccount?.name || 'Unknown'} - {formatDisplayDate(transfer.date)}</p>
+                    </div>
+                  </div>
+                  <p className={`flex-shrink-0 text-right font-semibold text-sm ${amountClass}`}>
+                    {amountPrefix}{formatPeso(transfer.amount)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AccountDetailView({
   account,
   accounts,
@@ -630,6 +803,7 @@ function AccountDetailView({
   const [showQr, setShowQr] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransfer, setEditingTransfer] = useState<MoneyTransfer | null>(null);
+  const [historyView, setHistoryView] = useState<'transactions' | 'transfers' | null>(null);
 
   const selectedDateStr = selectedDate
     ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
@@ -807,13 +981,17 @@ function AccountDetailView({
       </div>
 
       <div className="px-6">
-        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Transaction History</h3>
-        {accountTransactions.length === 0 ? <EmptyState title="No transaction history yet" body="Add transactions from dashboard categories to display data." /> : <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">{accountTransactions.map((t, i) => renderTransaction(t, i < accountTransactions.length - 1))}</div>}
-      </div>
-
-      <div className="px-6 mt-5">
-        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Transfer History</h3>
-        {accountTransfers.length === 0 ? <EmptyState title="No transfers yet" body="Move money between accounts to display transfer history." /> : <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">{accountTransfers.map((transfer, index) => renderTransfer(transfer, index < accountTransfers.length - 1))}</div>}
+        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">History</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => setHistoryView('transactions')} className="rounded-2xl bg-card border border-border p-4 text-left shadow-sm">
+            <p className="text-sm font-semibold">Transactions</p>
+            <p className="text-xs text-muted-foreground mt-1">{accountTransactions.length} records</p>
+          </button>
+          <button onClick={() => setHistoryView('transfers')} className="rounded-2xl bg-card border border-border p-4 text-left shadow-sm">
+            <p className="text-sm font-semibold">Transfers</p>
+            <p className="text-xs text-muted-foreground mt-1">{accountTransfers.length} records</p>
+          </button>
+        </div>
       </div>
 
       {showQr && account.qrImage && (
@@ -840,6 +1018,32 @@ function AccountDetailView({
         />
       )}
 
+      {historyView === 'transactions' && (
+        <TransactionHistoryModal
+          title={`${account.name} Transactions`}
+          transactions={accountTransactions}
+          accounts={accounts}
+          categories={categories}
+          onSelect={transaction => {
+            setEditingTransaction(transaction);
+          }}
+          onClose={() => setHistoryView(null)}
+        />
+      )}
+
+      {historyView === 'transfers' && (
+        <TransferHistoryModal
+          title={`${account.name} Transfers`}
+          transfers={accountTransfers}
+          accounts={accounts}
+          focusAccountId={account.id}
+          onSelect={transfer => {
+            setEditingTransfer(transfer);
+          }}
+          onClose={() => setHistoryView(null)}
+        />
+      )}
+
       {editingTransfer && (
         <TransferDetailsModal
           transfer={editingTransfer}
@@ -862,6 +1066,7 @@ export function AccountPage({ activeLedger, accounts, transactions, transfers, c
   const [transferring, setTransferring] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingTransfer, setEditingTransfer] = useState<MoneyTransfer | null>(null);
+  const [historyView, setHistoryView] = useState<'transactions' | 'transfers' | null>(null);
 
   const getCategoryById = (id: string) => categories.find(category => category.id === id);
   const getAccountById = (id: string) => accounts.find(account => account.id === id);
@@ -985,29 +1190,46 @@ export function AccountPage({ activeLedger, accounts, transactions, transfers, c
       </div>
 
       <div className="mt-8">
-        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">All Transaction History</h3>
-        {transactions.length === 0 ? (
-          <EmptyState title="No transactions yet" body="Add transactions from dashboard categories to display all history." />
-        ) : (
-          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-            {transactions.map((transaction, index) => renderAllTransaction(transaction, index < transactions.length - 1))}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-8">
-        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">Transfer History</h3>
-        {transfers.length === 0 ? (
-          <EmptyState title="No transfers yet" body="Use two accounts to move money and display transfer history." />
-        ) : (
-          <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
-            {transfers.map((transfer, index) => renderTransfer(transfer, index < transfers.length - 1))}
-          </div>
-        )}
+        <h3 className="font-semibold mb-3 text-sm text-muted-foreground">History</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <button onClick={() => setHistoryView('transactions')} className="rounded-2xl bg-card border border-border p-4 text-left shadow-sm">
+            <p className="text-sm font-semibold">Transactions</p>
+            <p className="text-xs text-muted-foreground mt-1">{transactions.length} records</p>
+          </button>
+          <button onClick={() => setHistoryView('transfers')} className="rounded-2xl bg-card border border-border p-4 text-left shadow-sm">
+            <p className="text-sm font-semibold">Transfers</p>
+            <p className="text-xs text-muted-foreground mt-1">{transfers.length} records</p>
+          </button>
+        </div>
       </div>
 
       {addingAccount && <AddAccountModal onAdd={onAddAccount} onClose={() => setAddingAccount(false)} />}
       {transferring && <TransferMoneyModal accounts={accounts} onAdd={onAddTransfer} onClose={() => setTransferring(false)} />}
+
+      {historyView === 'transactions' && (
+        <TransactionHistoryModal
+          title="All Transactions"
+          transactions={transactions}
+          accounts={accounts}
+          categories={categories}
+          onSelect={transaction => {
+            setEditingTransaction(transaction);
+          }}
+          onClose={() => setHistoryView(null)}
+        />
+      )}
+
+      {historyView === 'transfers' && (
+        <TransferHistoryModal
+          title="All Transfers"
+          transfers={transfers}
+          accounts={accounts}
+          onSelect={transfer => {
+            setEditingTransfer(transfer);
+          }}
+          onClose={() => setHistoryView(null)}
+        />
+      )}
 
       {editingTransfer && (
         <TransferDetailsModal

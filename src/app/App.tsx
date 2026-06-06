@@ -185,6 +185,16 @@ export default function App() {
     setActiveLedgerId(ledger.id);
   };
 
+  const updateLedgerName = (id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setLedgers(prev => prev.map(ledger => (
+      ledger.id === id
+        ? { ...ledger, name: trimmed }
+        : ledger
+    )));
+  };
+
   const deleteLedger = (id: string) => {
     setLedgers(prev => {
       const next = prev.filter(ledger => ledger.id !== id);
@@ -262,6 +272,16 @@ export default function App() {
   const addAccount = (account: Omit<Account, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
     setAccounts(prev => [...prev, { ...account, ledgerId: activeLedgerId, id: `a${Date.now()}` }]);
+  };
+
+  const updateAccountName = (id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || !activeLedgerId) return;
+    setAccounts(prev => prev.map(account => (
+      account.id === id && account.ledgerId === activeLedgerId
+        ? { ...account, name: trimmed }
+        : account
+    )));
   };
 
   const addTransfer = (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => {
@@ -347,6 +367,16 @@ export default function App() {
   const addCategory = (category: Omit<Category, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
     setCategories(prev => [...prev, { ...category, ledgerId: activeLedgerId, id: `c${Date.now()}` }]);
+  };
+
+  const updateCategoryName = (id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed || !activeLedgerId) return;
+    setCategories(prev => prev.map(category => (
+      category.id === id && category.ledgerId === activeLedgerId
+        ? { ...category, name: trimmed }
+        : category
+    )));
   };
 
   const deleteCategory = (id: string) => {
@@ -540,10 +570,13 @@ export default function App() {
           onSelectLedger={setActiveLedgerId}
           onUpdateProfile={setProfile}
           onAddLedger={addLedger}
+          onUpdateLedgerName={updateLedgerName}
           onDeleteLedger={deleteLedger}
           onAddAccount={addAccount}
+          onUpdateAccountName={updateAccountName}
           onDeleteAccount={deleteAccount}
           onAddCategory={addCategory}
+          onUpdateCategoryName={updateCategoryName}
           onDeleteCategory={deleteCategory}
           notificationsEnabled={notificationsEnabled}
           onSetNotificationsEnabled={setNotificationsEnabled}
