@@ -257,11 +257,13 @@ export default function App() {
     }));
   };
 
-  const deleteTransaction = (id: string) => {
+  const deleteTransaction = (id: string, mode: 'revert' | 'preserve') => {
     const currentTransaction = transactions.find(transaction => transaction.id === id);
     if (!currentTransaction || currentTransaction.ledgerId !== activeLedgerId) return;
 
     setTransactions(prev => prev.filter(transaction => transaction.id !== id));
+    if (mode === 'preserve') return;
+
     setAccounts(prev => prev.map(account => {
       if (account.id !== currentTransaction.accountId) return account;
       const delta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
@@ -345,11 +347,13 @@ export default function App() {
     }));
   };
 
-  const deleteTransfer = (id: string) => {
+  const deleteTransfer = (id: string, mode: 'revert' | 'preserve') => {
     const currentTransfer = transfers.find(transfer => transfer.id === id);
     if (!currentTransfer || currentTransfer.ledgerId !== activeLedgerId) return;
 
     setTransfers(prev => prev.filter(transfer => transfer.id !== id));
+    if (mode === 'preserve') return;
+
     setAccounts(prev => prev.map(account => {
       if (account.ledgerId !== currentTransfer.ledgerId) return account;
       if (account.id === currentTransfer.fromAccountId) return { ...account, balance: account.balance + currentTransfer.amount };

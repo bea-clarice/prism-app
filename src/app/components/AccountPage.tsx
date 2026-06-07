@@ -6,6 +6,8 @@ import { CategoryIcon } from './category-icons/CategoryIcon';
 import type { Account, Category, Ledger, MoneyTransfer, Transaction } from './types';
 import { formatDisplayDate, formatPeso, getPhilippineDate, getPhilippineDateString } from '../utils/format';
 
+type DeleteHistoryMode = 'revert' | 'preserve';
+
 interface AccountPageProps {
   activeLedger: Ledger | null;
   accounts: Account[];
@@ -15,9 +17,9 @@ interface AccountPageProps {
   onAddAccount: (account: Omit<Account, 'id' | 'ledgerId'>) => void;
   onAddTransfer: (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
   onUpdateTransfer: (id: string, transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
-  onDeleteTransfer: (id: string) => void;
+  onDeleteTransfer: (id: string, mode: DeleteHistoryMode) => void;
   onUpdateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
-  onDeleteTransaction: (id: string) => void;
+  onDeleteTransaction: (id: string, mode: DeleteHistoryMode) => void;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
@@ -234,7 +236,7 @@ function TransferDetailsModal({
   transfer: MoneyTransfer;
   accounts: Account[];
   onSave: (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
-  onDelete: () => void;
+  onDelete: (mode: DeleteHistoryMode) => void;
   onClose: () => void;
 }) {
   const [fromAccountId, setFromAccountId] = useState(transfer.fromAccountId);
@@ -244,6 +246,7 @@ function TransferDetailsModal({
   const [date, setDate] = useState(transfer.date);
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [deleteOptionsOpen, setDeleteOptionsOpen] = useState(false);
 
   const today = getPhilippineDateString();
   const fromAccount = accounts.find(account => account.id === transfer.fromAccountId);
@@ -382,7 +385,7 @@ function TransferDetailsModal({
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
-              <button onClick={onDelete} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
+              <button onClick={() => setDeleteOptionsOpen(true)} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
                 Delete
               </button>
               <button onClick={handleSave} className="rounded-xl p-3 bg-primary text-primary-foreground font-semibold">
@@ -391,6 +394,20 @@ function TransferDetailsModal({
             </div>
             {error && <p className="text-sm text-rose-600">{error}</p>}
           </div>
+        )}
+
+        {deleteOptionsOpen && (
+          <HistoryDeleteOptions
+            count={1}
+            itemName="transfer"
+            pluralName="transfers"
+            revertDescription="Removes the record and reverses the account balance movement."
+            onCancel={() => setDeleteOptionsOpen(false)}
+            onChoose={mode => {
+              onDelete(mode);
+              setDeleteOptionsOpen(false);
+            }}
+          />
         )}
       </div>
     </div>
@@ -411,7 +428,7 @@ function EditTransactionModal({
   accounts: Account[];
   category?: Category;
   onSave: (transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
-  onDelete: () => void;
+  onDelete: (mode: DeleteHistoryMode) => void;
   onClose: () => void;
 }) {
   const [description, setDescription] = useState(transaction.description);
@@ -424,6 +441,7 @@ function EditTransactionModal({
   const [date, setDate] = useState(transaction.date);
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [deleteOptionsOpen, setDeleteOptionsOpen] = useState(false);
 
   const today = getPhilippineDateString();
   const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
@@ -588,7 +606,7 @@ function EditTransactionModal({
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
-              <button onClick={onDelete} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
+              <button onClick={() => setDeleteOptionsOpen(true)} className="rounded-xl p-3 bg-rose-50 text-rose-600 font-semibold">
                 Delete
               </button>
               <button onClick={handleSave} disabled={!editingAccount} className="rounded-xl p-3 bg-primary text-primary-foreground font-semibold disabled:opacity-50">
@@ -598,6 +616,63 @@ function EditTransactionModal({
             {error && <p className="text-sm text-rose-600">{error}</p>}
           </div>
         )}
+
+        {deleteOptionsOpen && (
+          <HistoryDeleteOptions
+            count={1}
+            itemName="transaction"
+            pluralName="transactions"
+            revertDescription="Removes the record and reverses its account balance change."
+            onCancel={() => setDeleteOptionsOpen(false)}
+            onChoose={mode => {
+              onDelete(mode);
+              setDeleteOptionsOpen(false);
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoryDeleteOptions({
+  count,
+  itemName,
+  pluralName,
+  revertDescription,
+  onChoose,
+  onCancel,
+}: {
+  count: number;
+  itemName: string;
+  pluralName: string;
+  revertDescription: string;
+  onChoose: (mode: DeleteHistoryMode) => void;
+  onCancel: () => void;
+}) {
+  const label = count === 1 ? itemName : `${count} ${pluralName}`;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-6" onClick={onCancel}>
+      <div className="bg-card rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-border" onClick={event => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h3 className="font-semibold">Delete {label}?</h3>
+            <p className="text-sm text-muted-foreground mt-1">Choose how this delete should affect your saved balance.</p>
+          </div>
+          <button onClick={onCancel} className="p-2 rounded-full bg-muted"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="space-y-3">
+          <button onClick={() => onChoose('revert')} className="w-full rounded-2xl p-4 bg-rose-50 text-left text-rose-700 border border-rose-100">
+            <p className="font-semibold">Delete without saving</p>
+            <p className="text-sm mt-1 text-rose-600">{revertDescription}</p>
+          </button>
+          <button onClick={() => onChoose('preserve')} className="w-full rounded-2xl p-4 bg-muted text-left border border-border">
+            <p className="font-semibold">Save and delete</p>
+            <p className="text-sm text-muted-foreground mt-1">Removes the history record but keeps the saved account balance.</p>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -622,6 +697,7 @@ function TransactionHistoryModal({
   accounts,
   categories,
   onSelect,
+  onDeleteTransactions,
   onClose,
 }: {
   title: string;
@@ -629,9 +705,13 @@ function TransactionHistoryModal({
   accounts: Account[];
   categories: Category[];
   onSelect: (transaction: Transaction) => void;
+  onDeleteTransactions: (ids: string[], mode: DeleteHistoryMode) => void;
   onClose: () => void;
 }) {
   const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [marking, setMarking] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteOptionsOpen, setDeleteOptionsOpen] = useState(false);
 
   const getAccountById = (id: string) => accounts.find(account => account.id === id);
   const getCategoryById = (id: string) => categories.find(category => category.id === id);
@@ -640,6 +720,38 @@ function TransactionHistoryModal({
     if (typeFilter !== 'all' && transaction.type !== typeFilter) return false;
     return true;
   });
+  const filteredIds = filtered.map(transaction => transaction.id);
+  const allFilteredMarked = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+  const selectedCount = selectedIds.length;
+
+  const toggleMarking = () => {
+    setMarking(value => {
+      if (value) setSelectedIds([]);
+      return !value;
+    });
+  };
+
+  const toggleTransaction = (id: string) => {
+    setSelectedIds(prev => (
+      prev.includes(id)
+        ? prev.filter(selectedId => selectedId !== id)
+        : [...prev, id]
+    ));
+  };
+
+  const toggleMarkAll = () => {
+    setSelectedIds(prev => {
+      const withoutFiltered = prev.filter(id => !filteredIds.includes(id));
+      return allFilteredMarked ? withoutFiltered : [...withoutFiltered, ...filteredIds];
+    });
+  };
+
+  const handleDelete = (mode: DeleteHistoryMode) => {
+    onDeleteTransactions(selectedIds, mode);
+    setSelectedIds([]);
+    setMarking(false);
+    setDeleteOptionsOpen(false);
+  };
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
@@ -647,15 +759,43 @@ function TransactionHistoryModal({
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <h3 className="text-2xl font-bold">{title}</h3>
-            <p className="text-sm text-muted-foreground mt-1">{filtered.length} of {transactions.length} shown</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {marking ? `${selectedCount} marked` : `${filtered.length} of ${transactions.length} shown`}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full bg-muted"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-5">
-          <HistoryFilterButton active={typeFilter === 'all'} onClick={() => setTypeFilter('all')}>All</HistoryFilterButton>
-          <HistoryFilterButton active={typeFilter === 'income'} onClick={() => setTypeFilter('income')}>Income</HistoryFilterButton>
-          <HistoryFilterButton active={typeFilter === 'expense'} onClick={() => setTypeFilter('expense')}>Expense</HistoryFilterButton>
+        <div className="space-y-3 mb-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <HistoryFilterButton active={typeFilter === 'all'} onClick={() => setTypeFilter('all')}>All</HistoryFilterButton>
+              <HistoryFilterButton active={typeFilter === 'income'} onClick={() => setTypeFilter('income')}>Income</HistoryFilterButton>
+              <HistoryFilterButton active={typeFilter === 'expense'} onClick={() => setTypeFilter('expense')}>Expense</HistoryFilterButton>
+            </div>
+            {!marking && (
+              <button onClick={toggleMarking} className="px-1 py-2 text-sm font-semibold text-pink-500">
+                Mark
+              </button>
+            )}
+          </div>
+
+          {marking && (
+            <div>
+              <p className="text-right text-xs text-muted-foreground mb-2">{selectedCount} selected</p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button onClick={toggleMarking} className="rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground">
+                  Done
+                </button>
+                <button onClick={toggleMarkAll} disabled={filtered.length === 0} className="rounded-xl px-4 py-2 text-sm font-semibold bg-muted text-foreground disabled:opacity-40">
+                  {allFilteredMarked ? 'Clear all' : 'Mark all'}
+                </button>
+                <button onClick={() => setDeleteOptionsOpen(true)} disabled={selectedCount === 0} className="rounded-xl px-4 py-2 text-sm font-semibold bg-rose-50 text-rose-600 disabled:opacity-40">
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {filtered.length === 0 ? (
@@ -668,10 +808,15 @@ function TransactionHistoryModal({
               return (
                 <button
                   key={transaction.id}
-                  onClick={() => onSelect(transaction)}
+                  onClick={() => marking ? toggleTransaction(transaction.id) : onSelect(transaction)}
                   className={`w-full flex items-center justify-between gap-3 p-4 text-left ${index < filtered.length - 1 ? 'border-b border-border' : ''}`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3">
+                    {marking && (
+                      <span className={`h-5 w-5 flex-shrink-0 rounded-md border flex items-center justify-center ${selectedIds.includes(transaction.id) ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
+                        {selectedIds.includes(transaction.id) && <span className="h-2.5 w-2.5 rounded-sm bg-primary-foreground" />}
+                      </span>
+                    )}
                     <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                       {category ? <CategoryIcon icon={category.icon} className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
                     </div>
@@ -688,6 +833,17 @@ function TransactionHistoryModal({
             })}
           </div>
         )}
+
+        {deleteOptionsOpen && (
+          <HistoryDeleteOptions
+            count={selectedCount}
+            itemName="transaction"
+            pluralName="transactions"
+            revertDescription="Removes the record and reverses its account balance change."
+            onCancel={() => setDeleteOptionsOpen(false)}
+            onChoose={handleDelete}
+          />
+        )}
       </div>
     </div>
   );
@@ -699,6 +855,7 @@ function TransferHistoryModal({
   accounts,
   focusAccountId,
   onSelect,
+  onDeleteTransfers,
   onClose,
 }: {
   title: string;
@@ -706,9 +863,13 @@ function TransferHistoryModal({
   accounts: Account[];
   focusAccountId?: string;
   onSelect: (transfer: MoneyTransfer) => void;
+  onDeleteTransfers: (ids: string[], mode: DeleteHistoryMode) => void;
   onClose: () => void;
 }) {
   const [accountFilter, setAccountFilter] = useState('all');
+  const [marking, setMarking] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleteOptionsOpen, setDeleteOptionsOpen] = useState(false);
 
   const getAccountById = (id: string) => accounts.find(account => account.id === id);
   const filterAccounts = accounts.filter(account => account.id !== focusAccountId);
@@ -717,6 +878,38 @@ function TransferHistoryModal({
     if (accountFilter !== 'all' && transfer.fromAccountId !== accountFilter && transfer.toAccountId !== accountFilter) return false;
     return true;
   });
+  const filteredIds = filtered.map(transfer => transfer.id);
+  const allFilteredMarked = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+  const selectedCount = selectedIds.length;
+
+  const toggleMarking = () => {
+    setMarking(value => {
+      if (value) setSelectedIds([]);
+      return !value;
+    });
+  };
+
+  const toggleTransfer = (id: string) => {
+    setSelectedIds(prev => (
+      prev.includes(id)
+        ? prev.filter(selectedId => selectedId !== id)
+        : [...prev, id]
+    ));
+  };
+
+  const toggleMarkAll = () => {
+    setSelectedIds(prev => {
+      const withoutFiltered = prev.filter(id => !filteredIds.includes(id));
+      return allFilteredMarked ? withoutFiltered : [...withoutFiltered, ...filteredIds];
+    });
+  };
+
+  const handleDelete = (mode: DeleteHistoryMode) => {
+    onDeleteTransfers(selectedIds, mode);
+    setSelectedIds([]);
+    setMarking(false);
+    setDeleteOptionsOpen(false);
+  };
 
   return (
     <div className="fixed inset-0 bg-background z-50 overflow-y-auto">
@@ -724,18 +917,46 @@ function TransferHistoryModal({
         <div className="flex items-start justify-between gap-4 mb-5">
           <div>
             <h3 className="text-2xl font-bold">{title}</h3>
-            <p className="text-sm text-muted-foreground mt-1">{filtered.length} of {transfers.length} shown</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {marking ? `${selectedCount} marked` : `${filtered.length} of ${transfers.length} shown`}
+            </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full bg-muted"><X className="w-5 h-5" /></button>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-5">
-          <HistoryFilterButton active={accountFilter === 'all'} onClick={() => setAccountFilter('all')}>All</HistoryFilterButton>
-          {filterAccounts.map(account => (
-            <HistoryFilterButton key={account.id} active={accountFilter === account.id} onClick={() => setAccountFilter(account.id)}>
-              {account.name}
-            </HistoryFilterButton>
-          ))}
+        <div className="space-y-3 mb-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap gap-2">
+              <HistoryFilterButton active={accountFilter === 'all'} onClick={() => setAccountFilter('all')}>All</HistoryFilterButton>
+              {filterAccounts.map(account => (
+                <HistoryFilterButton key={account.id} active={accountFilter === account.id} onClick={() => setAccountFilter(account.id)}>
+                  {account.name}
+                </HistoryFilterButton>
+              ))}
+            </div>
+            {!marking && (
+              <button onClick={toggleMarking} className="px-1 py-2 text-sm font-semibold text-pink-500">
+                Mark
+              </button>
+            )}
+          </div>
+
+          {marking && (
+            <div>
+              <p className="text-right text-xs text-muted-foreground mb-2">{selectedCount} selected</p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button onClick={toggleMarking} className="rounded-xl px-4 py-2 text-sm font-semibold bg-primary text-primary-foreground">
+                  Done
+                </button>
+                <button onClick={toggleMarkAll} disabled={filtered.length === 0} className="rounded-xl px-4 py-2 text-sm font-semibold bg-muted text-foreground disabled:opacity-40">
+                  {allFilteredMarked ? 'Clear all' : 'Mark all'}
+                </button>
+                <button onClick={() => setDeleteOptionsOpen(true)} disabled={selectedCount === 0} className="rounded-xl px-4 py-2 text-sm font-semibold bg-rose-50 text-rose-600 disabled:opacity-40">
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {filtered.length === 0 ? (
@@ -751,10 +972,15 @@ function TransferHistoryModal({
               return (
                 <button
                   key={transfer.id}
-                  onClick={() => onSelect(transfer)}
+                  onClick={() => marking ? toggleTransfer(transfer.id) : onSelect(transfer)}
                   className={`w-full flex items-center justify-between gap-3 p-4 text-left ${index < filtered.length - 1 ? 'border-b border-border' : ''}`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-3">
+                    {marking && (
+                      <span className={`h-5 w-5 flex-shrink-0 rounded-md border flex items-center justify-center ${selectedIds.includes(transfer.id) ? 'bg-primary border-primary' : 'border-border bg-card'}`}>
+                        {selectedIds.includes(transfer.id) && <span className="h-2.5 w-2.5 rounded-sm bg-primary-foreground" />}
+                      </span>
+                    )}
                     <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                       <ArrowLeftRight className="w-5 h-5" />
                     </div>
@@ -770,6 +996,17 @@ function TransferHistoryModal({
               );
             })}
           </div>
+        )}
+
+        {deleteOptionsOpen && (
+          <HistoryDeleteOptions
+            count={selectedCount}
+            itemName="transfer"
+            pluralName="transfers"
+            revertDescription="Removes the record and reverses the account balance movement."
+            onCancel={() => setDeleteOptionsOpen(false)}
+            onChoose={handleDelete}
+          />
         )}
       </div>
     </div>
@@ -795,9 +1032,9 @@ function AccountDetailView({
   categories: Category[];
   onBack: () => void;
   onUpdateTransfer: (id: string, transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => void;
-  onDeleteTransfer: (id: string) => void;
+  onDeleteTransfer: (id: string, mode: DeleteHistoryMode) => void;
   onUpdateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'ledgerId'>) => void;
-  onDeleteTransaction: (id: string) => void;
+  onDeleteTransaction: (id: string, mode: DeleteHistoryMode) => void;
 }) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(getPhilippineDate());
   const [showQr, setShowQr] = useState(false);
@@ -1010,8 +1247,8 @@ function AccountDetailView({
           accounts={accounts}
           category={getCategoryById(editingTransaction.categoryId)}
           onSave={transaction => onUpdateTransaction(editingTransaction.id, transaction)}
-          onDelete={() => {
-            onDeleteTransaction(editingTransaction.id);
+          onDelete={mode => {
+            onDeleteTransaction(editingTransaction.id, mode);
             setEditingTransaction(null);
           }}
           onClose={() => setEditingTransaction(null)}
@@ -1027,6 +1264,7 @@ function AccountDetailView({
           onSelect={transaction => {
             setEditingTransaction(transaction);
           }}
+          onDeleteTransactions={(ids, mode) => ids.forEach(id => onDeleteTransaction(id, mode))}
           onClose={() => setHistoryView(null)}
         />
       )}
@@ -1040,6 +1278,7 @@ function AccountDetailView({
           onSelect={transfer => {
             setEditingTransfer(transfer);
           }}
+          onDeleteTransfers={(ids, mode) => ids.forEach(id => onDeleteTransfer(id, mode))}
           onClose={() => setHistoryView(null)}
         />
       )}
@@ -1049,8 +1288,8 @@ function AccountDetailView({
           transfer={editingTransfer}
           accounts={accounts}
           onSave={transfer => onUpdateTransfer(editingTransfer.id, transfer)}
-          onDelete={() => {
-            onDeleteTransfer(editingTransfer.id);
+          onDelete={mode => {
+            onDeleteTransfer(editingTransfer.id, mode);
             setEditingTransfer(null);
           }}
           onClose={() => setEditingTransfer(null)}
@@ -1215,6 +1454,7 @@ export function AccountPage({ activeLedger, accounts, transactions, transfers, c
           onSelect={transaction => {
             setEditingTransaction(transaction);
           }}
+          onDeleteTransactions={(ids, mode) => ids.forEach(id => onDeleteTransaction(id, mode))}
           onClose={() => setHistoryView(null)}
         />
       )}
@@ -1227,6 +1467,7 @@ export function AccountPage({ activeLedger, accounts, transactions, transfers, c
           onSelect={transfer => {
             setEditingTransfer(transfer);
           }}
+          onDeleteTransfers={(ids, mode) => ids.forEach(id => onDeleteTransfer(id, mode))}
           onClose={() => setHistoryView(null)}
         />
       )}
@@ -1236,8 +1477,8 @@ export function AccountPage({ activeLedger, accounts, transactions, transfers, c
           transfer={editingTransfer}
           accounts={accounts}
           onSave={transfer => onUpdateTransfer(editingTransfer.id, transfer)}
-          onDelete={() => {
-            onDeleteTransfer(editingTransfer.id);
+          onDelete={mode => {
+            onDeleteTransfer(editingTransfer.id, mode);
             setEditingTransfer(null);
           }}
           onClose={() => setEditingTransfer(null)}
@@ -1251,8 +1492,8 @@ export function AccountPage({ activeLedger, accounts, transactions, transfers, c
           accounts={accounts}
           category={getCategoryById(editingTransaction.categoryId)}
           onSave={transaction => onUpdateTransaction(editingTransaction.id, transaction)}
-          onDelete={() => {
-            onDeleteTransaction(editingTransaction.id);
+          onDelete={mode => {
+            onDeleteTransaction(editingTransaction.id, mode);
             setEditingTransaction(null);
           }}
           onClose={() => setEditingTransaction(null)}
