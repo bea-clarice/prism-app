@@ -79,6 +79,7 @@ function LedgerManager({ ledgers, activeLedgerId, onSelect, onAdd, onUpdateName,
   const [name, setName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [ledgerToDelete, setLedgerToDelete] = useState<Ledger | null>(null);
 
   const handleAdd = () => {
     if (!name.trim()) return;
@@ -100,44 +101,74 @@ function LedgerManager({ ledgers, activeLedgerId, onSelect, onAdd, onUpdateName,
   };
 
   return (
-    <Section title="Ledger Manager">
-      <p className="text-sm text-muted-foreground mb-4">Each ledger is a separate financial space. Switching ledgers shows only that ledger's accounts, categories, transactions, and bills.</p>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">Ledgers</p>
-        <button onClick={() => setAdding(value => !value)} className="text-primary text-sm font-medium flex items-center gap-1"><Plus className="w-4 h-4" /> Add</button>
-      </div>
-      {adding && (
-        <div className="flex gap-2 mb-4">
-          <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="Ledger name" autoFocus className="flex-1 bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          <button onClick={handleAdd} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
+    <>
+      <Section title="Ledger Manager">
+        <p className="text-sm text-muted-foreground mb-4">Each ledger is a separate financial space. Switching ledgers shows only that ledger's accounts, categories, transactions, and bills.</p>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-muted-foreground">Ledgers</p>
+          <button onClick={() => setAdding(value => !value)} className="text-primary text-sm font-medium flex items-center gap-1"><Plus className="w-4 h-4" /> Add</button>
+        </div>
+        {adding && (
+          <div className="flex gap-2 mb-4">
+            <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="Ledger name" autoFocus className="flex-1 bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            <button onClick={handleAdd} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
+          </div>
+        )}
+        <div className="space-y-2">
+          {ledgers.map(ledger => (
+            <div key={ledger.id} className={`flex items-center justify-between p-3 rounded-2xl border ${activeLedgerId === ledger.id ? 'border-primary bg-primary/10' : 'border-border bg-muted/30'}`}>
+              {editingId === ledger.id ? (
+                <div className="flex min-w-0 flex-1 gap-2">
+                  <input value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdate()} autoFocus className="min-w-0 flex-1 bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                  <button onClick={handleUpdate} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
+                  <button onClick={() => setEditingId(null)} className="bg-muted rounded-xl px-3"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <>
+                  <button onClick={() => onSelect(ledger.id)} className="text-left flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{ledger.name}</p>
+                    <p className="text-xs text-muted-foreground">{activeLedgerId === ledger.id ? 'Current ledger' : 'Switch to this ledger'}</p>
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => startEditing(ledger)} className="p-1 text-primary hover:opacity-70 transition-opacity" aria-label="Edit ledger name"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => setLedgerToDelete(ledger)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity" aria-label="Delete ledger"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {ledgers.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No ledgers yet. Add one to begin.</p>}
+        </div>
+      </Section>
+
+      {ledgerToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6" role="dialog" aria-modal="true" aria-labelledby="delete-ledger-title">
+          <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-xl">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <h3 id="delete-ledger-title" className="text-center text-lg font-semibold">Delete ledger?</h3>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              Deleting {ledgerToDelete.name} will also remove the accounts, categories, transactions, transfers, and bills stored in this ledger.
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button onClick={() => setLedgerToDelete(null)} className="rounded-xl bg-muted px-4 py-3 text-sm font-semibold text-foreground">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDelete(ledgerToDelete.id);
+                  setLedgerToDelete(null);
+                }}
+                className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
-      <div className="space-y-2">
-        {ledgers.map(ledger => (
-          <div key={ledger.id} className={`flex items-center justify-between p-3 rounded-2xl border ${activeLedgerId === ledger.id ? 'border-primary bg-primary/10' : 'border-border bg-muted/30'}`}>
-            {editingId === ledger.id ? (
-              <div className="flex min-w-0 flex-1 gap-2">
-                <input value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdate()} autoFocus className="min-w-0 flex-1 bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-                <button onClick={handleUpdate} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
-                <button onClick={() => setEditingId(null)} className="bg-muted rounded-xl px-3"><X className="w-4 h-4" /></button>
-              </div>
-            ) : (
-              <>
-                <button onClick={() => onSelect(ledger.id)} className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{ledger.name}</p>
-                  <p className="text-xs text-muted-foreground">{activeLedgerId === ledger.id ? 'Current ledger' : 'Switch to this ledger'}</p>
-                </button>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => startEditing(ledger)} className="p-1 text-primary hover:opacity-70 transition-opacity" aria-label="Edit ledger name"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => onDelete(ledger.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity" aria-label="Delete ledger"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-        {ledgers.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No ledgers yet. Add one to begin.</p>}
-      </div>
-    </Section>
+    </>
   );
 }
 
@@ -146,6 +177,7 @@ function AccountManager({ accounts, canAdd, onAdd, onUpdateName, onDelete }: { a
   const [form, setForm] = useState({ kind: 'bank' as Account['kind'], name: '', balance: '', number: '', qrImage: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [accountToDelete, setAccountToDelete] = useState<Account | null>(null);
 
   const handleFileChange = (file?: File) => {
     if (!file || !['image/jpeg', 'image/png'].includes(file.type)) return;
@@ -175,60 +207,90 @@ function AccountManager({ accounts, canAdd, onAdd, onUpdateName, onDelete }: { a
   };
 
   return (
-    <Section title="Account Manager">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-muted-foreground">Bank or Cash</p>
-        <button disabled={!canAdd} onClick={() => setAdding(value => !value)} className="text-primary text-sm font-medium flex items-center gap-1 disabled:opacity-40"><Plus className="w-4 h-4" /> Add</button>
-      </div>
-      {!canAdd && <p className="text-muted-foreground text-sm text-center py-3">Add a ledger first.</p>}
-
-      {adding && (
-        <div className="bg-muted rounded-2xl p-4 mb-4 space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            {(['bank', 'cash'] as const).map(kind => <button key={kind} onClick={() => setForm(f => ({ ...f, kind }))} className={`py-2 rounded-xl text-sm font-medium capitalize ${form.kind === kind ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}>{kind}</button>)}
-          </div>
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Account name" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          <input type="number" value={form.balance} onChange={e => setForm(f => ({ ...f, balance: e.target.value }))} placeholder="Balance" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          {form.kind === 'bank' && (
-            <>
-              <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))} placeholder="Account number" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-              <label className="block bg-card rounded-xl p-3 cursor-pointer">
-                <input type="file" accept="image/png,image/jpeg" onChange={e => handleFileChange(e.target.files?.[0])} className="hidden" />
-                <div className="flex items-center gap-3"><ImagePlus className="w-5 h-5 text-primary" /><span className="text-sm">Insert QR image optional</span></div>
-                {form.qrImage && <img src={form.qrImage} alt="QR preview" className="mt-3 w-20 h-20 rounded-xl object-cover border border-border" />}
-              </label>
-            </>
-          )}
-          <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">Add Account</button>
+    <>
+      <Section title="Account Manager">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-muted-foreground">Bank or Cash</p>
+          <button disabled={!canAdd} onClick={() => setAdding(value => !value)} className="text-primary text-sm font-medium flex items-center gap-1 disabled:opacity-40"><Plus className="w-4 h-4" /> Add</button>
         </div>
-      )}
+        {!canAdd && <p className="text-muted-foreground text-sm text-center py-3">Add a ledger first.</p>}
 
-      <div className="space-y-1">
-        {accounts.map(account => (
-          <div key={account.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-            {editingId === account.id ? (
-              <div className="flex min-w-0 flex-1 gap-2">
-                <input value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdate()} autoFocus className="min-w-0 flex-1 bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-                <button onClick={handleUpdate} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
-                <button onClick={() => setEditingId(null)} className="bg-muted rounded-xl px-3"><X className="w-4 h-4" /></button>
-              </div>
-            ) : (
+        {adding && (
+          <div className="bg-muted rounded-2xl p-4 mb-4 space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              {(['bank', 'cash'] as const).map(kind => <button key={kind} onClick={() => setForm(f => ({ ...f, kind }))} className={`py-2 rounded-xl text-sm font-medium capitalize ${form.kind === kind ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}>{kind}</button>)}
+            </div>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Account name" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            <input type="number" value={form.balance} onChange={e => setForm(f => ({ ...f, balance: e.target.value }))} placeholder="Balance" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            {form.kind === 'bank' && (
               <>
-                <div className="min-w-0">
-                  <p className="font-medium text-sm truncate">{account.name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{account.kind} - {formatPeso(account.balance)}{account.number ? ` - ${account.number}` : ''}</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => startEditing(account)} className="p-1 text-primary hover:opacity-70 transition-opacity" aria-label="Edit account name"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => onDelete(account.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity" aria-label="Delete account"><Trash2 className="w-4 h-4" /></button>
-                </div>
+                <input value={form.number} onChange={e => setForm(f => ({ ...f, number: e.target.value }))} placeholder="Account number" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                <label className="block bg-card rounded-xl p-3 cursor-pointer">
+                  <input type="file" accept="image/png,image/jpeg" onChange={e => handleFileChange(e.target.files?.[0])} className="hidden" />
+                  <div className="flex items-center gap-3"><ImagePlus className="w-5 h-5 text-primary" /><span className="text-sm">Insert QR image optional</span></div>
+                  {form.qrImage && <img src={form.qrImage} alt="QR preview" className="mt-3 w-20 h-20 rounded-xl object-cover border border-border" />}
+                </label>
               </>
             )}
+            <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">Add Account</button>
           </div>
-        ))}
-        {canAdd && accounts.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No accounts yet. Add account details to display data.</p>}
-      </div>
-    </Section>
+        )}
+
+        <div className="space-y-1">
+          {accounts.map(account => (
+            <div key={account.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+              {editingId === account.id ? (
+                <div className="flex min-w-0 flex-1 gap-2">
+                  <input value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdate()} autoFocus className="min-w-0 flex-1 bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                  <button onClick={handleUpdate} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
+                  <button onClick={() => setEditingId(null)} className="bg-muted rounded-xl px-3"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <>
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{account.name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{account.kind} - {formatPeso(account.balance)}{account.number ? ` - ${account.number}` : ''}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => startEditing(account)} className="p-1 text-primary hover:opacity-70 transition-opacity" aria-label="Edit account name"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => setAccountToDelete(account)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity" aria-label="Delete account"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {canAdd && accounts.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No accounts yet. Add account details to display data.</p>}
+        </div>
+      </Section>
+
+      {accountToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
+          <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-xl">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <h3 id="delete-account-title" className="text-center text-lg font-semibold">Delete account?</h3>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              Deleting {accountToDelete.name} will also remove the transactions and transfers stored under this account.
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button onClick={() => setAccountToDelete(null)} className="rounded-xl bg-muted px-4 py-3 text-sm font-semibold text-foreground">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDelete(accountToDelete.id);
+                  setAccountToDelete(null);
+                }}
+                className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
