@@ -7,24 +7,6 @@ import { DashboardPage } from './components/DashboardPage';
 import { PrismLogo } from './components/PrismLogo';
 import { SettingsPage } from './components/SettingsPage';
 import type { Account, Bill, Category, Ledger, MoneyTransfer, Profile, Transaction } from './components/types';
-import {
-  signInWithGoogle,
-  signOutUser,
-  subscribeToUserData,
-  saveLedger,
-  removeLedger,
-  saveAccount,
-  removeAccount,
-  saveCategory,
-  removeCategory,
-  saveTransaction,
-  removeTransaction,
-  saveTransfer,
-  removeTransfer,
-  saveBill,
-  removeBill,
-  auth,
-} from './firebase';
 
 const STORAGE_KEY = 'prism-app-state-v1';
 
@@ -46,7 +28,6 @@ interface PersistedState {
 export default function App() {
   const [isSessionLoading, setIsSessionLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [uid, setUid] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeLedgerId, setActiveLedgerId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile>({
@@ -66,9 +47,7 @@ export default function App() {
   const [ledgerPickerOpen, setLedgerPickerOpen] = useState(false);
   const ledgerPickerRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
-  const firestoreUnsubRef = useRef<(() => void) | null>(null);
 
-  // ── 1. Restore from localStorage on first load ────────────────────────────
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
@@ -98,66 +77,10 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // ── 2. Listen for Firebase Auth state changes ─────────────────────────────
-  useEffect(() => {
-    if (!auth) return;
-
-    const unsubAuth = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setUid(user.uid);
-      } else {
-        setUid(null);
-        firestoreUnsubRef.current?.();
-        firestoreUnsubRef.current = null;
-      }
-    });
-
-    return () => unsubAuth();
-  }, []);
-
-  // ── 3. Subscribe to Firestore when uid is available ───────────────────────
-  useEffect(() => {
-    if (!uid) return;
-
-    firestoreUnsubRef.current?.();
-
-    const unsub = subscribeToUserData(uid, (key, docs) => {
-      switch (key) {
-        case 'ledgers':
-          setLedgers(docs as Ledger[]);
-          break;
-        case 'accounts':
-          setAccounts(docs as Account[]);
-          break;
-        case 'categories':
-          setCategories(docs as Category[]);
-          break;
-        case 'transactions':
-          setTransactions(
-            (docs as Transaction[]).sort((a, b) =>
-              (b.date ?? '').localeCompare(a.date ?? ''),
-            ),
-          );
-          break;
-        case 'transfers':
-          setTransfers(docs as MoneyTransfer[]);
-          break;
-        case 'bills':
-          setBills(docs as Bill[]);
-          break;
-      }
-    });
-
-    firestoreUnsubRef.current = unsub;
-    return () => unsub();
-  }, [uid]);
-
-  // ── 4. Dark mode ──────────────────────────────────────────────────────────
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
-  // ── 5. Close header menus on outside click ────────────────────────────────
   useEffect(() => {
     const closeHeaderMenus = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -173,7 +96,6 @@ export default function App() {
     return () => document.removeEventListener('pointerdown', closeHeaderMenus);
   }, []);
 
-  // ── 6. Persist to localStorage (offline fallback) ─────────────────────────
   useEffect(() => {
     if (isSessionLoading) return;
     const state: PersistedState = {
@@ -207,7 +129,6 @@ export default function App() {
     transfers,
   ]);
 
-  // ── Derived state ─────────────────────────────────────────────────────────
   const activeLedger = ledgers.find(ledger => ledger.id === activeLedgerId) || null;
 
   const ledgerData = useMemo(() => {
@@ -248,61 +169,33 @@ export default function App() {
       .filter(Boolean) as { id: string; title: string; body: string; dueDate: string }[];
   }, [ledgerData.bills, notificationsEnabled]);
 
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const handleGoogleAuth = async () => {
-    try {
-      const nextProfile = await signInWithGoogle();
-      setProfile(nextProfile);
-      setIsAuthenticated(true);
-      // uid is set automatically via onAuthStateChanged
-    } catch (err: any) {
-      if (err.code === 'auth/popup-closed-by-user') return;
-      console.error('Google sign-in failed:', err.message);
-    }
+  const handleGoogleAuth = (nextProfile: Profile) => {
+    setProfile(nextProfile);
+    setIsAuthenticated(true);
   };
 
-  const logout = async () => {
-    firestoreUnsubRef.current?.();
-    firestoreUnsubRef.current = null;
-    await signOutUser();
+  const logout = () => {
     setIsAuthenticated(false);
-    setUid(null);
     setActiveTab('dashboard');
-    setLedgers([]);
-    setAccounts([]);
-    setCategories([]);
-    setTransactions([]);
-    setTransfers([]);
-    setBills([]);
-    window.localStorage.removeItem(STORAGE_KEY);
   };
 
-  // ── Ledger actions ────────────────────────────────────────────────────────
   const addLedger = (name: string) => {
-    const ledger: Ledger = { id: `l${Date.now()}`, name };
+    const ledger = { id: `l${Date.now()}`, name };
     setLedgers(prev => [...prev, ledger]);
     setActiveLedgerId(ledger.id);
-    if (uid) saveLedger(uid, ledger);
   };
 
   const updateLedgerName = (id: string, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
     setLedgers(prev => prev.map(ledger => (
-      ledger.id === id ? { ...ledger, name: trimmed } : ledger
+      ledger.id === id
+        ? { ...ledger, name: trimmed }
+        : ledger
     )));
-    const updated = ledgers.find(l => l.id === id);
-    if (uid && updated) saveLedger(uid, { ...updated, name: trimmed });
   };
 
   const deleteLedger = (id: string) => {
-    // Collect child data before clearing state
-    const childAccounts = accounts.filter(a => a.ledgerId === id);
-    const childCategories = categories.filter(c => c.ledgerId === id);
-    const childTransactions = transactions.filter(t => t.ledgerId === id);
-    const childTransfers = transfers.filter(t => t.ledgerId === id);
-    const childBills = bills.filter(b => b.ledgerId === id);
-
     setLedgers(prev => {
       const next = prev.filter(ledger => ledger.id !== id);
       if (activeLedgerId === id) {
@@ -315,35 +208,20 @@ export default function App() {
     setTransactions(prev => prev.filter(transaction => transaction.ledgerId !== id));
     setTransfers(prev => prev.filter(transfer => transfer.ledgerId !== id));
     setBills(prev => prev.filter(bill => bill.ledgerId !== id));
-
-    if (uid) {
-      removeLedger(uid, id);
-      childAccounts.forEach(a => removeAccount(uid, a.id));
-      childCategories.forEach(c => removeCategory(uid, c.id));
-      childTransactions.forEach(t => removeTransaction(uid, t.id));
-      childTransfers.forEach(t => removeTransfer(uid, t.id));
-      childBills.forEach(b => removeBill(uid, b.id));
-    }
   };
 
-  // ── Transaction actions ───────────────────────────────────────────────────
   const addTransaction = (transaction: Omit<Transaction, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
     const delta = transaction.type === 'income' ? transaction.amount : -transaction.amount;
     const selectedAccount = accounts.find(account => account.id === transaction.accountId && account.ledgerId === activeLedgerId);
     if (!selectedAccount || selectedAccount.balance + delta < 0) return;
     const accountBalanceAfter = selectedAccount.balance + delta;
-    const updatedAccount: Account = { ...selectedAccount, balance: accountBalanceAfter };
     const newTransaction: Transaction = { ...transaction, accountBalanceAfter, ledgerId: activeLedgerId, id: `t${Date.now()}` };
     setTransactions(prev => [newTransaction, ...prev]);
     setAccounts(prev => prev.map(account => {
       if (account.id !== transaction.accountId || account.ledgerId !== activeLedgerId) return account;
-      return updatedAccount;
+      return { ...account, balance: account.balance + delta };
     }));
-    if (uid) {
-      saveTransaction(uid, newTransaction);
-      saveAccount(uid, updatedAccount);
-    }
   };
 
   const updateTransaction = (id: string, nextTransaction: Omit<Transaction, 'id' | 'ledgerId'>) => {
@@ -378,25 +256,21 @@ export default function App() {
     };
 
     setTransactions(prev => prev.map(transaction => (
-      transaction.id === id ? updatedTransaction : transaction
+      transaction.id === id
+        ? updatedTransaction
+        : transaction
     )));
-    const updatedAccounts = accounts.map(account => {
+
+    setAccounts(prev => prev.map(account => {
       if (account.ledgerId !== currentTransaction.ledgerId) return account;
+
       let balance = account.balance;
+
       if (account.id === currentTransaction.accountId) balance -= oldDelta;
       if (account.id === nextTransaction.accountId) balance += nextDelta;
+
       return { ...account, balance };
-    });
-    setAccounts(updatedAccounts);
-    if (uid) {
-      saveTransaction(uid, updatedTransaction);
-      updatedAccounts
-        .filter(account => (
-          account.ledgerId === currentTransaction.ledgerId &&
-          (account.id === currentTransaction.accountId || account.id === nextTransaction.accountId)
-        ))
-        .forEach(account => saveAccount(uid, account));
-    }
+    }));
   };
 
   const deleteTransaction = (id: string, mode: 'revert' | 'preserve') => {
@@ -404,27 +278,18 @@ export default function App() {
     if (!currentTransaction || currentTransaction.ledgerId !== activeLedgerId) return;
 
     setTransactions(prev => prev.filter(transaction => transaction.id !== id));
-    if (mode !== 'preserve') {
-      const updatedAccounts = accounts.map(account => {
-        if (account.id !== currentTransaction.accountId) return account;
-        const delta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
-        return { ...account, balance: account.balance - delta };
-      });
-      setAccounts(updatedAccounts);
-      if (uid) {
-        const updatedAccount = updatedAccounts.find(account => account.id === currentTransaction.accountId);
-        if (updatedAccount) saveAccount(uid, updatedAccount);
-      }
-    }
-    if (uid) removeTransaction(uid, id);
+    if (mode === 'preserve') return;
+
+    setAccounts(prev => prev.map(account => {
+      if (account.id !== currentTransaction.accountId) return account;
+      const delta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
+      return { ...account, balance: account.balance - delta };
+    }));
   };
 
-  // ── Account actions ───────────────────────────────────────────────────────
   const addAccount = (account: Omit<Account, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
-    const newAccount: Account = { ...account, ledgerId: activeLedgerId, id: `a${Date.now()}` };
-    setAccounts(prev => [...prev, newAccount]);
-    if (uid) saveAccount(uid, newAccount);
+    setAccounts(prev => [...prev, { ...account, ledgerId: activeLedgerId, id: `a${Date.now()}` }]);
   };
 
   const updateAccountName = (id: string, name: string) => {
@@ -435,16 +300,8 @@ export default function App() {
         ? { ...account, name: trimmed }
         : account
     )));
-    const updated = accounts.find(a => a.id === id);
-    if (uid && updated) saveAccount(uid, { ...updated, name: trimmed });
   };
 
-  const deleteAccount = (id: string) => {
-    setAccounts(prev => prev.filter(account => account.id !== id));
-    if (uid) removeAccount(uid, id);
-  };
-
-  // ── Transfer actions ──────────────────────────────────────────────────────
   const addTransfer = (transfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
     const fromAccount = accounts.find(account => account.id === transfer.fromAccountId && account.ledgerId === activeLedgerId);
@@ -459,19 +316,12 @@ export default function App() {
     };
 
     setTransfers(prev => [newTransfer, ...prev]);
-    const updatedAccounts = accounts.map(account => {
+    setAccounts(prev => prev.map(account => {
       if (account.ledgerId !== activeLedgerId) return account;
       if (account.id === transfer.fromAccountId) return { ...account, balance: account.balance - transfer.amount };
       if (account.id === transfer.toAccountId) return { ...account, balance: account.balance + transfer.amount };
       return account;
-    });
-    setAccounts(updatedAccounts);
-    if (uid) {
-      saveTransfer(uid, newTransfer);
-      updatedAccounts
-        .filter(account => account.id === transfer.fromAccountId || account.id === transfer.toAccountId)
-        .forEach(account => saveAccount(uid, account));
-    }
+    }));
   };
 
   const updateTransfer = (id: string, nextTransfer: Omit<MoneyTransfer, 'id' | 'ledgerId'>) => {
@@ -495,32 +345,22 @@ export default function App() {
     };
 
     setTransfers(prev => prev.map(transfer => (
-      transfer.id === id ? updatedTransfer : transfer
+      transfer.id === id
+        ? updatedTransfer
+        : transfer
     )));
-    const updatedAccounts = accounts.map(account => {
+
+    setAccounts(prev => prev.map(account => {
       if (account.ledgerId !== currentTransfer.ledgerId) return account;
+
       let balance = account.balance;
       if (account.id === currentTransfer.fromAccountId) balance += currentTransfer.amount;
       if (account.id === currentTransfer.toAccountId) balance -= currentTransfer.amount;
       if (account.id === nextTransfer.fromAccountId) balance -= nextTransfer.amount;
       if (account.id === nextTransfer.toAccountId) balance += nextTransfer.amount;
+
       return { ...account, balance };
-    });
-    setAccounts(updatedAccounts);
-    if (uid) {
-      saveTransfer(uid, updatedTransfer);
-      updatedAccounts
-        .filter(account => (
-          account.ledgerId === currentTransfer.ledgerId &&
-          (
-            account.id === currentTransfer.fromAccountId ||
-            account.id === currentTransfer.toAccountId ||
-            account.id === nextTransfer.fromAccountId ||
-            account.id === nextTransfer.toAccountId
-          )
-        ))
-        .forEach(account => saveAccount(uid, account));
-    }
+    }));
   };
 
   const deleteTransfer = (id: string, mode: 'revert' | 'preserve') => {
@@ -528,29 +368,23 @@ export default function App() {
     if (!currentTransfer || currentTransfer.ledgerId !== activeLedgerId) return;
 
     setTransfers(prev => prev.filter(transfer => transfer.id !== id));
-    if (mode !== 'preserve') {
-      const updatedAccounts = accounts.map(account => {
-        if (account.ledgerId !== currentTransfer.ledgerId) return account;
-        if (account.id === currentTransfer.fromAccountId) return { ...account, balance: account.balance + currentTransfer.amount };
-        if (account.id === currentTransfer.toAccountId) return { ...account, balance: account.balance - currentTransfer.amount };
-        return account;
-      });
-      setAccounts(updatedAccounts);
-      if (uid) {
-        updatedAccounts
-          .filter(account => account.id === currentTransfer.fromAccountId || account.id === currentTransfer.toAccountId)
-          .forEach(account => saveAccount(uid, account));
-      }
-    }
-    if (uid) removeTransfer(uid, id);
+    if (mode === 'preserve') return;
+
+    setAccounts(prev => prev.map(account => {
+      if (account.ledgerId !== currentTransfer.ledgerId) return account;
+      if (account.id === currentTransfer.fromAccountId) return { ...account, balance: account.balance + currentTransfer.amount };
+      if (account.id === currentTransfer.toAccountId) return { ...account, balance: account.balance - currentTransfer.amount };
+      return account;
+    }));
   };
 
-  // ── Category actions ──────────────────────────────────────────────────────
+  const deleteAccount = (id: string) => {
+    setAccounts(prev => prev.filter(account => account.id !== id));
+  };
+
   const addCategory = (category: Omit<Category, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
-    const newCategory: Category = { ...category, ledgerId: activeLedgerId, id: `c${Date.now()}` };
-    setCategories(prev => [...prev, newCategory]);
-    if (uid) saveCategory(uid, newCategory);
+    setCategories(prev => [...prev, { ...category, ledgerId: activeLedgerId, id: `c${Date.now()}` }]);
   };
 
   const updateCategoryName = (id: string, name: string) => {
@@ -561,59 +395,39 @@ export default function App() {
         ? { ...category, name: trimmed }
         : category
     )));
-    const updated = categories.find(c => c.id === id);
-    if (uid && updated) saveCategory(uid, { ...updated, name: trimmed });
   };
 
   const deleteCategory = (id: string) => {
     setCategories(prev => prev.filter(category => category.id !== id));
-    if (uid) removeCategory(uid, id);
   };
 
-  // ── Bill actions ──────────────────────────────────────────────────────────
   const addBill = (bill: Omit<Bill, 'id' | 'paid' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
-    const newBill: Bill = { ...bill, ledgerId: activeLedgerId, id: `b${Date.now()}`, paid: false };
-    setBills(prev => [newBill, ...prev]);
-    if (uid) saveBill(uid, newBill);
+    setBills(prev => [{ ...bill, ledgerId: activeLedgerId, id: `b${Date.now()}`, paid: false }, ...prev]);
   };
 
   const markBillPaid = (id: string, payment: { paidBy: 'account' | 'other'; accountId?: string }) => {
     const bill = bills.find(nextBill => nextBill.id === id);
     if (!bill || bill.ledgerId !== activeLedgerId || bill.paid) return;
 
-    const updatedBill: Bill = {
-      ...bill,
-      paid: true,
-      paidBy: payment.paidBy,
-      paidAccountId: payment.paidBy === 'account' ? payment.accountId : undefined,
-    };
-
     setBills(prev => prev.map(nextBill => (
-      nextBill.id === id ? updatedBill : nextBill
+      nextBill.id === id
+        ? { ...nextBill, paid: true, paidBy: payment.paidBy, paidAccountId: payment.paidBy === 'account' ? payment.accountId : undefined }
+        : nextBill
     )));
 
     if (payment.paidBy === 'account' && payment.accountId) {
-      const updatedAccounts = accounts.map(account => (
+      setAccounts(prev => prev.map(account => (
         account.id === payment.accountId && account.ledgerId === bill.ledgerId
           ? { ...account, balance: account.balance - bill.amount }
           : account
-      ));
-      setAccounts(updatedAccounts);
-      if (uid) {
-        const updatedAccount = updatedAccounts.find(account => account.id === payment.accountId);
-        if (updatedAccount) saveAccount(uid, updatedAccount);
-      }
+      )));
     }
-    if (uid) saveBill(uid, updatedBill);
   };
 
-  const deleteBill = (id: string) => {
+  const deleteBill = (id: string) =>
     setBills(prev => prev.filter(bill => bill.id !== id));
-    if (uid) removeBill(uid, id);
-  };
 
-  // ── Nav ───────────────────────────────────────────────────────────────────
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: Home },
     { key: 'account', label: 'Accounts', icon: User },
@@ -621,7 +435,6 @@ export default function App() {
     { key: 'settings', label: 'Settings', icon: Settings },
   ];
 
-  // ── Render ────────────────────────────────────────────────────────────────
   if (isSessionLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-6 text-center">
