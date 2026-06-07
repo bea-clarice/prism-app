@@ -47,6 +47,7 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
 
   const itemizedTotal = paymentItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
   const today = getPhilippineDateString();
+  const selectedAccount = accounts.find(account => account.id === accountId);
 
   const addPaymentItem = () => {
     setShowPaymentItems(true);
@@ -68,6 +69,10 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
       return;
     }
     if (!parsed || !accountId) return;
+    if (category.type === 'expense' && selectedAccount && selectedAccount.balance < parsed) {
+      setError(`${selectedAccount.name} does not have enough balance for this expense.`);
+      return;
+    }
     onAdd({
       description: description.trim() || category.name,
       amount: parsed,
@@ -150,7 +155,7 @@ function AddTransactionModal({ category, accounts, onAdd, onClose }: AddTransact
                   }`}
                 >
                   <p className="text-sm font-semibold truncate">{account.name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{account.kind}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{account.kind} - {formatPeso(account.balance)}</p>
                 </button>
               ))}
             </div>

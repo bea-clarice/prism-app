@@ -470,6 +470,14 @@ function EditTransactionModal({
       return;
     }
     if (!parsed || !accountId) return;
+    if (transaction.type === 'expense' && editingAccount) {
+      const oldDelta = transaction.type === 'income' ? transaction.amount : -transaction.amount;
+      const availableBalance = editingAccount.balance - (editingAccount.id === transaction.accountId ? oldDelta : 0);
+      if (availableBalance < parsed) {
+        setError(`${editingAccount.name} does not have enough balance for this expense.`);
+        return;
+      }
+    }
     onSave({
       description: description.trim() || category?.name || 'Transaction',
       amount: parsed,
@@ -599,7 +607,7 @@ function EditTransactionModal({
                     }`}
                   >
                     <p className="text-sm font-semibold truncate">{nextAccount.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{nextAccount.kind}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{nextAccount.kind} - {formatPeso(nextAccount.balance)}</p>
                   </button>
                 ))}
               </div>
@@ -875,6 +883,9 @@ function TransferHistoryModal({
   const filterAccounts = accounts.filter(account => account.id !== focusAccountId);
 
   const filtered = transfers.filter(transfer => {
+    const fromAccountExists = Boolean(getAccountById(transfer.fromAccountId));
+    const toAccountExists = Boolean(getAccountById(transfer.toAccountId));
+    if (accountFilter !== 'all' && (!fromAccountExists || !toAccountExists)) return false;
     if (accountFilter !== 'all' && transfer.fromAccountId !== accountFilter && transfer.toAccountId !== accountFilter) return false;
     return true;
   });

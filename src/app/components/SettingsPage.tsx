@@ -271,7 +271,7 @@ function AccountManager({ accounts, canAdd, onAdd, onUpdateName, onDelete }: { a
             </div>
             <h3 id="delete-account-title" className="text-center text-lg font-semibold">Delete account?</h3>
             <p className="mt-2 text-center text-sm text-muted-foreground">
-              Deleting {accountToDelete.name} will also remove the transactions and transfers stored under this account.
+              Deleting {accountToDelete.name} only removes the account. Its transaction and transfer history will stay saved and can still be viewed from All history.
             </p>
             <div className="mt-6 grid grid-cols-2 gap-3">
               <button onClick={() => setAccountToDelete(null)} className="rounded-xl bg-muted px-4 py-3 text-sm font-semibold text-foreground">
@@ -300,6 +300,7 @@ function CategoryManager({ categories, canAdd, onAdd, onUpdateName, onDelete }: 
   const [form, setForm] = useState({ name: '', icon: 'wallet' as CategoryIconKey });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
 
   const handleAdd = () => {
     if (!form.name.trim()) return;
@@ -328,58 +329,88 @@ function CategoryManager({ categories, canAdd, onAdd, onUpdateName, onDelete }: 
   };
 
   return (
-    <Section title="Category Manager">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex gap-2">
-          <button onClick={() => setActiveTab('income')} className={`px-3 py-2 rounded-xl text-sm ${activeTab === 'income' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>Income</button>
-          <button onClick={() => setActiveTab('expense')} className={`px-3 py-2 rounded-xl text-sm ${activeTab === 'expense' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>Expense</button>
-        </div>
-        <button disabled={!canAdd} onClick={() => setAdding(value => !value)} className="text-primary text-sm font-medium flex items-center gap-1 disabled:opacity-40"><Plus className="w-4 h-4" /> Add</button>
-      </div>
-      {!canAdd && <p className="text-muted-foreground text-sm text-center py-3">Add a ledger first.</p>}
-
-      {adding && (
-        <div className="bg-muted rounded-2xl p-4 mb-4 space-y-3">
-          <p className="text-xs text-muted-foreground">Adding to {activeTab}</p>
-          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Category name" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-          <div className="grid grid-cols-4 gap-2">
-            {CATEGORY_ICON_OPTIONS.map(option => (
-              <button key={option.key} onClick={() => setForm(f => ({ ...f, icon: option.key }))} className={`h-14 rounded-xl text-xs flex flex-col items-center justify-center gap-1 ${form.icon === option.key ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}>
-                <CategoryIcon icon={option.key} className="w-4 h-4" />
-                <span>{option.label}</span>
-              </button>
-            ))}
+    <>
+      <Section title="Category Manager">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex gap-2">
+            <button onClick={() => setActiveTab('income')} className={`px-3 py-2 rounded-xl text-sm ${activeTab === 'income' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>Income</button>
+            <button onClick={() => setActiveTab('expense')} className={`px-3 py-2 rounded-xl text-sm ${activeTab === 'expense' ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'}`}>Expense</button>
           </div>
-          <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">Add {activeTab} Category</button>
+          <button disabled={!canAdd} onClick={() => setAdding(value => !value)} className="text-primary text-sm font-medium flex items-center gap-1 disabled:opacity-40"><Plus className="w-4 h-4" /> Add</button>
+        </div>
+        {!canAdd && <p className="text-muted-foreground text-sm text-center py-3">Add a ledger first.</p>}
+
+        {adding && (
+          <div className="bg-muted rounded-2xl p-4 mb-4 space-y-3">
+            <p className="text-xs text-muted-foreground">Adding to {activeTab}</p>
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Category name" className="w-full bg-card rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+            <div className="grid grid-cols-4 gap-2">
+              {CATEGORY_ICON_OPTIONS.map(option => (
+                <button key={option.key} onClick={() => setForm(f => ({ ...f, icon: option.key }))} className={`h-14 rounded-xl text-xs flex flex-col items-center justify-center gap-1 ${form.icon === option.key ? 'bg-primary text-white' : 'bg-card text-muted-foreground'}`}>
+                  <CategoryIcon icon={option.key} className="w-4 h-4" />
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={handleAdd} className="w-full bg-primary text-white rounded-xl py-2 text-sm font-medium">Add {activeTab} Category</button>
+          </div>
+        )}
+
+        <div className="space-y-1">
+          {displayed.map(category => (
+            <div key={category.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+              {editingId === category.id ? (
+                <div className="flex min-w-0 flex-1 gap-2">
+                  <input value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdate()} autoFocus className="min-w-0 flex-1 bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
+                  <button onClick={handleUpdate} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
+                  <button onClick={() => setEditingId(null)} className="bg-muted rounded-xl px-3"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex flex-shrink-0 items-center justify-center"><CategoryIcon icon={category.icon} className="w-4 h-4" /></span>
+                    <span className="font-medium text-sm truncate">{category.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => startEditing(category)} className="p-1 text-primary hover:opacity-70 transition-opacity" aria-label="Edit category name"><Pencil className="w-4 h-4" /></button>
+                    <button onClick={() => setCategoryToDelete(category)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity" aria-label="Delete category"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+          {canAdd && displayed.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No {activeTab} categories yet. Add details to display data.</p>}
+        </div>
+      </Section>
+
+      {categoryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6" role="dialog" aria-modal="true" aria-labelledby="delete-category-title">
+          <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 shadow-xl">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <h3 id="delete-category-title" className="text-center text-lg font-semibold">Delete category?</h3>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              Deleting {categoryToDelete.name} only removes the category. Your transaction history and saved data will stay the same.
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button onClick={() => setCategoryToDelete(null)} className="rounded-xl bg-muted px-4 py-3 text-sm font-semibold text-foreground">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onDelete(categoryToDelete.id);
+                  setCategoryToDelete(null);
+                }}
+                className="rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
-
-      <div className="space-y-1">
-        {displayed.map(category => (
-          <div key={category.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-            {editingId === category.id ? (
-              <div className="flex min-w-0 flex-1 gap-2">
-                <input value={editingName} onChange={e => setEditingName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdate()} autoFocus className="min-w-0 flex-1 bg-muted rounded-xl p-2 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground" />
-                <button onClick={handleUpdate} className="bg-primary text-white rounded-xl px-3"><Check className="w-4 h-4" /></button>
-                <button onClick={() => setEditingId(null)} className="bg-muted rounded-xl px-3"><X className="w-4 h-4" /></button>
-              </div>
-            ) : (
-              <>
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex flex-shrink-0 items-center justify-center"><CategoryIcon icon={category.icon} className="w-4 h-4" /></span>
-                  <span className="font-medium text-sm truncate">{category.name}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => startEditing(category)} className="p-1 text-primary hover:opacity-70 transition-opacity" aria-label="Edit category name"><Pencil className="w-4 h-4" /></button>
-                  <button onClick={() => onDelete(category.id)} className="p-1 text-rose-500 hover:opacity-70 transition-opacity" aria-label="Delete category"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              </>
-            )}
-          </div>
-        ))}
-        {canAdd && displayed.length === 0 && <p className="text-muted-foreground text-sm text-center py-3">No {activeTab} categories yet. Add details to display data.</p>}
-      </div>
-    </Section>
+    </>
   );
 }
 

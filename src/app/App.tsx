@@ -213,7 +213,9 @@ export default function App() {
   const addTransaction = (transaction: Omit<Transaction, 'id' | 'ledgerId'>) => {
     if (!activeLedgerId) return;
     const delta = transaction.type === 'income' ? transaction.amount : -transaction.amount;
-    const accountBalanceAfter = (accounts.find(account => account.id === transaction.accountId && account.ledgerId === activeLedgerId)?.balance ?? 0) + delta;
+    const selectedAccount = accounts.find(account => account.id === transaction.accountId && account.ledgerId === activeLedgerId);
+    if (!selectedAccount || selectedAccount.balance + delta < 0) return;
+    const accountBalanceAfter = selectedAccount.balance + delta;
     const newTransaction: Transaction = { ...transaction, accountBalanceAfter, ledgerId: activeLedgerId, id: `t${Date.now()}` };
     setTransactions(prev => [newTransaction, ...prev]);
     setAccounts(prev => prev.map(account => {
@@ -229,6 +231,20 @@ export default function App() {
     const oldDelta = currentTransaction.type === 'income' ? currentTransaction.amount : -currentTransaction.amount;
     const nextDelta = nextTransaction.type === 'income' ? nextTransaction.amount : -nextTransaction.amount;
     const nextAccount = accounts.find(account => account.id === nextTransaction.accountId && account.ledgerId === currentTransaction.ledgerId);
+    const balancePreview = new Map(
+      accounts
+        .filter(account => account.ledgerId === currentTransaction.ledgerId)
+        .map(account => [account.id, account.balance])
+    );
+
+    if (balancePreview.has(currentTransaction.accountId)) {
+      balancePreview.set(currentTransaction.accountId, balancePreview.get(currentTransaction.accountId)! - oldDelta);
+    }
+    if (balancePreview.has(nextTransaction.accountId)) {
+      balancePreview.set(nextTransaction.accountId, balancePreview.get(nextTransaction.accountId)! + nextDelta);
+    }
+    if (Array.from(balancePreview.values()).some(balance => balance < 0)) return;
+
     const accountBalanceAfter = nextAccount
       ? nextAccount.balance - (nextAccount.id === currentTransaction.accountId ? oldDelta : 0) + nextDelta
       : nextTransaction.accountBalanceAfter;
@@ -364,8 +380,6 @@ export default function App() {
 
   const deleteAccount = (id: string) => {
     setAccounts(prev => prev.filter(account => account.id !== id));
-    setTransactions(prev => prev.filter(transaction => transaction.accountId !== id));
-    setTransfers(prev => prev.filter(transfer => transfer.fromAccountId !== id && transfer.toAccountId !== id));
   };
 
   const addCategory = (category: Omit<Category, 'id' | 'ledgerId'>) => {
@@ -385,7 +399,6 @@ export default function App() {
 
   const deleteCategory = (id: string) => {
     setCategories(prev => prev.filter(category => category.id !== id));
-    setTransactions(prev => prev.filter(transaction => transaction.categoryId !== id));
   };
 
   const addBill = (bill: Omit<Bill, 'id' | 'paid' | 'ledgerId'>) => {
